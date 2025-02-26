@@ -1,9 +1,9 @@
 #include "io.hpp"
-#include "vga.hpp"
-#include "terminal.hpp"
 #include "keyboard.hpp"
 #include "pic.hpp"
 #include "shell.hpp"
+#include "terminal.hpp"
+#include "vga.hpp"
 
 extern "C" void kernel_main() {
     *((volatile uint32_t*)0xB8000) = 0x4F724F65;
@@ -20,7 +20,6 @@ extern "C" void kernel_main() {
 
     for (;;) {
         char c = keyboard_read();
-        if (c != 0)
-            process_keypress(c);
+        if (c != 0) process_keypress(c);
     }
 }

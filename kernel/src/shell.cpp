@@ -1,6 +1,8 @@
 #include "shell.hpp"
-#include "terminal.hpp"
+
 #include <cstring>
+
+#include "terminal.hpp"
 
 char input_buffer[256] = {0};
 size_t input_pos = 0;

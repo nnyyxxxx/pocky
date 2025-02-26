@@ -1,26 +1,27 @@
 #include "keyboard.hpp"
-#include "io.hpp"
-#include "terminal.hpp"
-#include "vga.hpp"
-#include "shell.hpp"
+
 #include <cstring>
 
+#include "io.hpp"
+#include "shell.hpp"
+#include "terminal.hpp"
+#include "vga.hpp"
+
 static const char keyboard_map[128] = {
-    0,   27,  '1', '2', '3',  '4', '5', '6',  '7', '8', '9',  '0', '-', '=', '\b', '\t',
-    'q', 'w', 'e', 'r', 't',  'y', 'u', 'i',  'o', 'p', '[',  ']', '\n', 0,   'a',  's',
-    'd', 'f', 'g', 'h', 'j',  'k', 'l', ';',  '\'', '`', 0,   '\\', 'z', 'x', 'c',  'v',
-    'b', 'n', 'm', ',', '.',  '/', 0,   '*',  0,   ' ', 0,    0,   0,   0,    0,    0,
-    0,   0,   0,   0,   0,    0,   0,   0,    0,   0,   0,    0,   0,   0,    0,    0,
-    0,   0,   0,   0,   0,    0,   0,   0,    0,   0,   0,    0,   0,   0,    0,    0,
-    0,   0,   0,   0,   0,    0,   0,   0,    0,   0,   0,    0,   0,   0,
+    0,   27,  '1', '2', '3', '4', '5', '6', '7',  '8', '9', '0',  '-',  '=', '\b', '\t',
+    'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o',  'p', '[', ']',  '\n', 0,   'a',  's',
+    'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', '`', 0,   '\\', 'z',  'x', 'c',  'v',
+    'b', 'n', 'm', ',', '.', '/', 0,   '*', 0,    ' ', 0,   0,    0,    0,   0,    0,
+    0,   0,   0,   0,   0,   0,   0,   0,   0,    0,   0,   0,    0,    0,   0,    0,
+    0,   0,   0,   0,   0,   0,   0,   0,   0,    0,   0,   0,    0,    0,   0,    0,
+    0,   0,   0,   0,   0,   0,   0,   0,   0,    0,   0,   0,    0,    0,
 };
 
 char keyboard_read() {
     if (inb(KEYBOARD_STATUS_PORT) & 1) {
         uint8_t scancode = inb(KEYBOARD_DATA_PORT);
 
-        if (scancode < 128)
-            return keyboard_map[scancode];
+        if (scancode < 128) return keyboard_map[scancode];
     }
 
     return 0;

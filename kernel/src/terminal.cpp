@@ -1,6 +1,8 @@
 #include "terminal.hpp"
-#include "vga.hpp"
+
 #include <cstring>
+
+#include "vga.hpp"
 
 uint16_t terminal_row = 0;
 uint16_t terminal_column = 0;

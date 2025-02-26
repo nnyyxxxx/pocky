@@ -1,6 +1,6 @@
 #pragma once
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 
 constexpr uint16_t VGA_WIDTH = 80;
 constexpr uint16_t VGA_HEIGHT = 25;

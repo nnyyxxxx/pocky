@@ -1,4 +1,5 @@
 #include "vga.hpp"
+
 #include "io.hpp"
 
 extern volatile uint16_t* const VGA_MEMORY = reinterpret_cast<uint16_t*>(0xB8000);
