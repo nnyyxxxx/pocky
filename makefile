@@ -2,19 +2,23 @@ CXX = g++
 AS = nasm
 LD = ld
 
-CXXFLAGS = -m64 -std=c++14 -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-rtti -fstack-protector-strong
+ASFLAGS = -I$(BOOTLOADER_SRC)
+
+CXXFLAGS = -m64 -std=c++14 -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-rtti -fstack-protector-strong \
+           -I$(KERNEL_SRC) -I$(KERNEL_SRC)/hw -I$(KERNEL_SRC)/core -I$(KERNEL_SRC)/shell \
+           -I$(KERNEL_SRC)/drivers -I$(KERNEL_SRC)/lib
 
 KERNEL_SRC = kernel/src
 BOOTLOADER_SRC = bootloader/src
 BUILD_DIR = build
 
-KERNEL_CPP_SRCS = $(KERNEL_SRC)/kernel.cpp $(KERNEL_SRC)/lib.cpp $(KERNEL_SRC)/io.cpp \
-                  $(KERNEL_SRC)/vga.cpp $(KERNEL_SRC)/terminal.cpp $(KERNEL_SRC)/keyboard.cpp \
-                  $(KERNEL_SRC)/pic.cpp $(KERNEL_SRC)/shell.cpp $(KERNEL_SRC)/gdt.cpp \
-                  $(KERNEL_SRC)/idt.cpp
+KERNEL_CPP_SRCS = $(KERNEL_SRC)/core/kernel.cpp $(KERNEL_SRC)/lib/lib.cpp $(KERNEL_SRC)/hw/io.cpp \
+                  $(KERNEL_SRC)/shell/vga.cpp $(KERNEL_SRC)/shell/terminal.cpp $(KERNEL_SRC)/drivers/keyboard.cpp \
+                  $(KERNEL_SRC)/hw/pic.cpp $(KERNEL_SRC)/shell/shell.cpp $(KERNEL_SRC)/hw/gdt.cpp \
+                  $(KERNEL_SRC)/hw/idt.cpp
 
-KERNEL_ASM_SRCS = $(KERNEL_SRC)/entry.asm $(KERNEL_SRC)/gdt.asm $(KERNEL_SRC)/idt.asm \
-                  $(KERNEL_SRC)/isr.asm
+KERNEL_ASM_SRCS = $(KERNEL_SRC)/asm/entry.asm $(KERNEL_SRC)/asm/gdt.asm $(KERNEL_SRC)/asm/idt.asm \
+                  $(KERNEL_SRC)/asm/isr.asm
 
 KERNEL_CPP_OBJS = $(patsubst $(KERNEL_SRC)/%.cpp,$(BUILD_DIR)/%.o,$(KERNEL_CPP_SRCS))
 KERNEL_ASM_OBJS = $(patsubst $(KERNEL_SRC)/%.asm,$(BUILD_DIR)/%_asm.o,$(KERNEL_ASM_SRCS))
@@ -29,19 +33,28 @@ OS_IMAGE = $(BUILD_DIR)/os.img
 all: format clean $(OS_IMAGE)
 
 $(BUILD_DIR):
-	mkdir -p $(BUILD_DIR)
+	mkdir -p $(BUILD_DIR)/core
+	mkdir -p $(BUILD_DIR)/lib
+	mkdir -p $(BUILD_DIR)/hw
+	mkdir -p $(BUILD_DIR)/shell
+	mkdir -p $(BUILD_DIR)/drivers
+	mkdir -p $(BUILD_DIR)/asm
 
 $(BUILD_DIR)/%.o: $(KERNEL_SRC)/%.cpp | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/%_asm.o: $(KERNEL_SRC)/%.asm | $(BUILD_DIR)
-	$(AS) -f elf64 $< -o $@
+	@mkdir -p $(dir $@)
+	$(AS) $(ASFLAGS) -f elf64 $< -o $@
 
-$(BOOTLOADER_BIN): $(BOOTLOADER_SRC)/boot.asm | $(BUILD_DIR)
-	$(AS) -f bin $(BOOTLOADER_SRC)/boot.asm -o $@
+$(BOOTLOADER_BIN): $(BOOTLOADER_SRC)/stages/boot.asm | $(BUILD_DIR)
+	$(AS) $(ASFLAGS) -f bin $(BOOTLOADER_SRC)/stages/boot.asm -o $@
 
-$(BOOTLOADER_STAGE2_BIN): $(BOOTLOADER_SRC)/stage2.asm $(BOOTLOADER_SRC)/gdt.asm $(BOOTLOADER_SRC)/pm_switch.asm $(BOOTLOADER_SRC)/gdt64.asm $(BOOTLOADER_SRC)/long_mode.asm $(BOOTLOADER_SRC)/lm_switch.asm | $(BUILD_DIR)
-	$(AS) -f bin $(BOOTLOADER_SRC)/stage2.asm -o $@
+$(BOOTLOADER_STAGE2_BIN): $(BOOTLOADER_SRC)/stages/stage2.asm $(BOOTLOADER_SRC)/memory/gdt.asm \
+                         $(BOOTLOADER_SRC)/mode/pm_switch.asm $(BOOTLOADER_SRC)/memory/gdt64.asm \
+                         $(BOOTLOADER_SRC)/mode/long_mode.asm $(BOOTLOADER_SRC)/mode/lm_switch.asm | $(BUILD_DIR)
+	$(AS) $(ASFLAGS) -f bin $(BOOTLOADER_SRC)/stages/stage2.asm -o $@
 
 $(KERNEL_BIN): $(KERNEL_OBJ) kernel/linker.ld | $(BUILD_DIR)
 	$(LD) -T kernel/linker.ld -m elf_x86_64 -nostdlib $(KERNEL_OBJ) -o $(BUILD_DIR)/kernel_elf.bin

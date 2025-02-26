@@ -9,11 +9,13 @@ size_t input_pos = 0;
 bool handling_exception = false;
 
 void cmd_help() {
+    terminal_writestring("\n");
     terminal_writestring("Available commands:\n");
     terminal_writestring("  help  - Display this help message\n");
     terminal_writestring("  clear - Clear the screen\n");
     terminal_writestring("  echo  - Display the text that follows\n");
     terminal_writestring("  crash - Crash the kernel - Gets caught by the exception handler\n");
+    terminal_writestring("\n");
 }
 
 void cmd_echo(const char* args) {

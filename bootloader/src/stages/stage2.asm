@@ -71,12 +71,12 @@ count_error:
     jmp $
 
 
-%include "bootloader/src/gdt.asm"
-%include "bootloader/src/pm_switch.asm"
+%include "memory/gdt.asm"
+%include "mode/pm_switch.asm"
 
-%include "bootloader/src/gdt64.asm"
-%include "bootloader/src/long_mode.asm"
-%include "bootloader/src/lm_switch.asm"
+%include "memory/gdt64.asm"
+%include "mode/long_mode.asm"
+%include "mode/lm_switch.asm"
 
 boot_drive db 0
 
