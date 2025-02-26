@@ -25,7 +25,7 @@ void update_cursor() {
 
 void cursor_initialize() {
     outb(VGA_CTRL_PORT, 0x0A);
-    outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xC0) | 0);
+    outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xC0) | 14);
 
     outb(VGA_CTRL_PORT, 0x0B);
     outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xE0) | 15);
