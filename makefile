@@ -24,7 +24,7 @@ BOOTLOADER_STAGE2_BIN = $(BUILD_DIR)/stage2.bin
 KERNEL_BIN = $(BUILD_DIR)/kernel.bin
 OS_IMAGE = $(BUILD_DIR)/os.img
 
-all: $(OS_IMAGE)
+all: clean $(OS_IMAGE)
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
