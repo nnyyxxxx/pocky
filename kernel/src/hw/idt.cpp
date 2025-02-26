@@ -112,7 +112,7 @@ extern "C" void isr45();
 extern "C" void isr46();
 extern "C" void isr47();
 
-}
+}  // namespace
 
 struct InterruptFrame {
     uint64_t r15, r14, r13, r12, r11, r10, r9, r8;

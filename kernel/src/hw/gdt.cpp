@@ -32,7 +32,7 @@ void create_descriptor(GDTEntry& entry, uint32_t base, uint32_t limit, uint8_t a
 }
 
 extern "C" void load_gdt(GDTDescriptor* gdtr);
-}
+}  // namespace
 
 void init_gdt() {
     volatile uint16_t* vga = reinterpret_cast<uint16_t*>(0xB8000);
