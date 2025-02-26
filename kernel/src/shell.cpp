@@ -9,10 +9,20 @@ void cmd_help() {
     terminal_writestring("Available commands:\n");
     terminal_writestring("  help  - Display this help message\n");
     terminal_writestring("  clear - Clear the screen\n");
+    terminal_writestring("  echo  - Display the text that follows\n");
+}
+
+void cmd_echo(const char* args) {
+    terminal_writestring(args);
+    terminal_writestring("\n");
 }
 
 void process_command() {
-    if (strcmp(input_buffer, "help") == 0)
+    if (strncmp(input_buffer, "echo ", 5) == 0)
+        cmd_echo(input_buffer + 5);
+    else if (strcmp(input_buffer, "echo") == 0)
+        terminal_writestring("\n");
+    else if (strcmp(input_buffer, "help") == 0)
         cmd_help();
     else if (strcmp(input_buffer, "clear") == 0)
         terminal_clear();
