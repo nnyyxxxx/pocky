@@ -26,7 +26,9 @@ long_mode_entry:
 
     mov rsi, 0x10000
     mov rdi, KERNEL_OFFSET
-    mov rcx, KERNEL_SECTORS * 512 / 8
+    movzx rcx, byte [kernel_sectors]
+    shl rcx, 9
+    shr rcx, 3
     rep movsq
 
     mov dword [0xB8000], 0x1F4B1F4F

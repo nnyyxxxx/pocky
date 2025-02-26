@@ -2,7 +2,7 @@
 [ORG 0x8000]
 
 KERNEL_OFFSET equ 0x100000
-KERNEL_SECTORS equ 128
+KERNEL_SIZE_OFFSET equ 502
 
 start:
     call clear_screen
@@ -46,8 +46,27 @@ load_kernel:
     mov es, ax
     xor bx, bx
 
+    mov ax, 0x0000
+    mov es, ax
+    mov bx, 0x7C00
     mov ah, 0x02
-    mov al, KERNEL_SECTORS
+    mov al, 1
+    mov ch, 0
+    mov cl, 1
+    mov dh, 0
+    mov dl, [boot_drive]
+    int 0x13
+    jc disk_error
+
+    mov al, [es:bx + KERNEL_SIZE_OFFSET]
+    mov [kernel_sectors], al
+
+    mov ax, 0x1000
+    mov es, ax
+    xor bx, bx
+
+    mov ah, 0x02
+    mov al, [kernel_sectors]
     mov ch, 0
     mov cl, 9
     mov dh, 0
@@ -55,7 +74,7 @@ load_kernel:
     int 0x13
     jc disk_error
 
-    cmp al, KERNEL_SECTORS
+    cmp al, [kernel_sectors]
     jne count_error
     ret
 
@@ -78,6 +97,7 @@ count_error:
 %include "mode/lm_switch.asm"
 
 boot_drive db 0
+kernel_sectors db 0
 
 msg_boot_prompt db 'Press any key to boot into kernel...', 13, 10, 0
 msg_disk_error db 'Disk error!', 13, 10, 0

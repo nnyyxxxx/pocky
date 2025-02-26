@@ -64,10 +64,14 @@ $(KERNEL_BIN): $(KERNEL_OBJ) kernel/linker.ld | $(BUILD_DIR)
 	objcopy -O binary $(BUILD_DIR)/kernel_elf.bin $@
 
 $(OS_IMAGE): $(BOOTLOADER_BIN) $(BOOTLOADER_STAGE2_BIN) $(KERNEL_BIN)
-	dd if=/dev/zero of=$@ bs=512 count=2880
-	dd if=$(BOOTLOADER_BIN) of=$@ conv=notrunc
-	dd if=$(BOOTLOADER_STAGE2_BIN) of=$@ bs=512 seek=1 conv=notrunc
-	dd if=$(KERNEL_BIN) of=$@ bs=512 seek=8 conv=notrunc
+	@KERNEL_SIZE=$$(wc -c < $(KERNEL_BIN));\
+	KERNEL_SECTORS=$$((($${KERNEL_SIZE} + 511) / 512));\
+	echo "Kernel size: $${KERNEL_SIZE} bytes ($${KERNEL_SECTORS} sectors)";\
+	dd if=/dev/zero of=$@ bs=512 count=2880;\
+	dd if=$(BOOTLOADER_BIN) of=$@ conv=notrunc;\
+	dd if=$(BOOTLOADER_STAGE2_BIN) of=$@ bs=512 seek=1 conv=notrunc;\
+	dd if=$(KERNEL_BIN) of=$@ bs=512 seek=8 conv=notrunc;\
+	printf "\x$$(printf '%02x' $${KERNEL_SECTORS})" | dd of=$@ bs=1 seek=502 count=1 conv=notrunc
 
 run: $(OS_IMAGE)
 	@echo "Killing any existing QEMU processes..."
