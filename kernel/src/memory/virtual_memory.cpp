@@ -52,8 +52,7 @@ void VirtualMemoryManager::initialize() {
 
     for (uintptr_t addr = 0; addr < 0x400000; addr += PAGE_SIZE) {
         map_page(addr, addr, true);
-        if ((addr & 0xFFFFF) == 0)
-            vga[180] = 0x0F00 | ('0' + (addr >> 20));
+        if ((addr & 0xFFFFF) == 0) vga[180] = 0x0F00 | ('0' + (addr >> 20));
     }
     vga[166] = 0x0F00 | '6';
 }

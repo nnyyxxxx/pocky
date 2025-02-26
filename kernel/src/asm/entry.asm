@@ -1,6 +1,7 @@
 [BITS 64]
 
 extern kernel_main
+extern init_global_constructors
 
 section .text
 global _start
@@ -10,6 +11,7 @@ _start:
 
     cld
 
+    call init_global_constructors
     call kernel_main
 
     cli

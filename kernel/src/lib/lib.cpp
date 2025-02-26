@@ -1,6 +1,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "terminal.hpp"
+
 extern "C" size_t strlen(const char* str) {
     size_t len = 0;
     while (str[len] != '\0') {
@@ -67,12 +69,10 @@ extern "C" void* memmove(void* dest, const void* src, size_t count) {
 }
 
 extern "C" [[noreturn]] void __stack_chk_fail() {
-    // TODO: add panic handling
-
+    terminal_writestring("\nStack smashing detected! Aborting...\n");
     while (true) {
         asm volatile("cli; hlt");
     }
 }
 
-extern "C" uintptr_t __stack_chk_guard;
 uintptr_t __stack_chk_guard = 0xDEADBEEFDEADBEEF;

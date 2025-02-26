@@ -50,8 +50,7 @@ extern "C" void kernel_main() {
 
     for (uintptr_t addr = 0; addr < IDENTITY_MAP_SIZE; addr += 4096) {
         vmm.map_page(addr, addr, true);
-        if ((addr & 0xFFFFF) == 0)
-            vga[90] = static_cast<uint8_t>('0' + ((addr >> 20) & 0xF));
+        if ((addr & 0xFFFFF) == 0) vga[90] = static_cast<uint8_t>('0' + ((addr >> 20) & 0xF));
     }
     vga[91] = 0x0500 | '4';
 
