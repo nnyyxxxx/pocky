@@ -2,7 +2,7 @@ CXX = g++
 AS = nasm
 LD = ld
 
-CXXFLAGS = -m64 -std=c++14 -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-rtti
+CXXFLAGS = -m64 -std=c++14 -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-rtti -fstack-protector-strong
 
 KERNEL_SRC = kernel/src
 BOOTLOADER_SRC = bootloader/src

@@ -65,3 +65,14 @@ extern "C" void* memmove(void* dest, const void* src, size_t count) {
 
     return dest;
 }
+
+extern "C" [[noreturn]] void __stack_chk_fail() {
+    // TODO: add panic handling
+
+    while (true) {
+        asm volatile("cli; hlt");
+    }
+}
+
+extern "C" uintptr_t __stack_chk_guard;
+uintptr_t __stack_chk_guard = 0xDEADBEEFDEADBEEF;
