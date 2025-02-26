@@ -2,7 +2,7 @@ CXX = g++
 AS = nasm
 LD = ld
 
-CXXFLAGS = -m32 -std=c++14 -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-rtti
+CXXFLAGS = -m64 -std=c++14 -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-rtti
 
 KERNEL_SRC = kernel/src
 BOOTLOADER_SRC = bootloader/src
@@ -20,6 +20,7 @@ KERNEL_ASM_OBJS = $(patsubst $(KERNEL_SRC)/%.asm,$(BUILD_DIR)/%.o,$(KERNEL_ASM_S
 KERNEL_OBJ = $(KERNEL_ASM_OBJS) $(KERNEL_CPP_OBJS)
 
 BOOTLOADER_BIN = $(BUILD_DIR)/boot.bin
+BOOTLOADER_STAGE2_BIN = $(BUILD_DIR)/stage2.bin
 KERNEL_BIN = $(BUILD_DIR)/kernel.bin
 OS_IMAGE = $(BUILD_DIR)/os.img
 
@@ -32,24 +33,28 @@ $(BUILD_DIR)/%.o: $(KERNEL_SRC)/%.cpp | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/%.o: $(KERNEL_SRC)/%.asm | $(BUILD_DIR)
-	$(AS) -f elf32 $< -o $@
+	$(AS) -f elf64 $< -o $@
 
-$(BOOTLOADER_BIN): $(BOOTLOADER_SRC)/boot.asm $(BOOTLOADER_SRC)/disk.asm $(BOOTLOADER_SRC)/print.asm $(BOOTLOADER_SRC)/gdt.asm $(BOOTLOADER_SRC)/pm_switch.asm | $(BUILD_DIR)
+$(BOOTLOADER_BIN): $(BOOTLOADER_SRC)/boot.asm | $(BUILD_DIR)
 	$(AS) -f bin $(BOOTLOADER_SRC)/boot.asm -o $@
 
+$(BOOTLOADER_STAGE2_BIN): $(BOOTLOADER_SRC)/stage2.asm $(BOOTLOADER_SRC)/gdt.asm $(BOOTLOADER_SRC)/pm_switch.asm $(BOOTLOADER_SRC)/gdt64.asm $(BOOTLOADER_SRC)/long_mode.asm $(BOOTLOADER_SRC)/lm_switch.asm | $(BUILD_DIR)
+	$(AS) -f bin $(BOOTLOADER_SRC)/stage2.asm -o $@
+
 $(KERNEL_BIN): $(KERNEL_OBJ) kernel/linker.ld | $(BUILD_DIR)
-	$(LD) -T kernel/linker.ld -m elf_i386 -nostdlib $(KERNEL_OBJ) -o $(BUILD_DIR)/kernel_elf.bin
+	$(LD) -T kernel/linker.ld -m elf_x86_64 -nostdlib $(KERNEL_OBJ) -o $(BUILD_DIR)/kernel_elf.bin
 	objcopy -O binary $(BUILD_DIR)/kernel_elf.bin $@
 
-$(OS_IMAGE): $(BOOTLOADER_BIN) $(KERNEL_BIN) | $(BUILD_DIR)
+$(OS_IMAGE): $(BOOTLOADER_BIN) $(BOOTLOADER_STAGE2_BIN) $(KERNEL_BIN) | $(BUILD_DIR)
 	dd if=/dev/zero of=$(OS_IMAGE) bs=512 count=2880
 	dd if=$(BOOTLOADER_BIN) of=$(OS_IMAGE) conv=notrunc
-	dd if=$(KERNEL_BIN) of=$(OS_IMAGE) seek=1 conv=notrunc bs=512
+	dd if=$(BOOTLOADER_STAGE2_BIN) of=$(OS_IMAGE) seek=1 conv=notrunc bs=512
+	dd if=$(KERNEL_BIN) of=$(OS_IMAGE) seek=9 conv=notrunc bs=512
 
 run: $(OS_IMAGE)
 	@echo "Killing any existing QEMU processes..."
-	-pkill -f qemu-system-i386 || true
-	qemu-system-i386 -drive file=build/os.img,format=raw,if=floppy -display vnc=127.0.0.1:0 &
+	-pkill -f qemu-system-x86_64 || true
+	qemu-system-x86_64 -drive file=build/os.img,format=raw,if=floppy -display vnc=127.0.0.1:0 &
 	@echo "Waiting for QEMU to start..."
 	@sleep 1
 	@echo "Launching VNC viewer..."

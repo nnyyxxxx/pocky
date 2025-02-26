@@ -18,9 +18,9 @@ void update_cursor() {
     uint16_t pos = terminal_row * VGA_WIDTH + terminal_column;
 
     outb(VGA_CTRL_PORT, 14);
-    outb(VGA_DATA_PORT, pos >> 8);
+    outb(VGA_DATA_PORT, static_cast<uint8_t>(pos >> 8));
     outb(VGA_CTRL_PORT, 15);
-    outb(VGA_DATA_PORT, pos & 0xFF);
+    outb(VGA_DATA_PORT, static_cast<uint8_t>(pos & 0xFF));
 }
 
 void cursor_initialize() {

@@ -1,4 +1,4 @@
-[BITS 32]
+[BITS 64]
 
 extern kernel_main
 
@@ -6,7 +6,7 @@ section .text
 global _start
 
 _start:
-    mov esp, stack_top
+    mov rsp, stack_top
 
     cld
 
