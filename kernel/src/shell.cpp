@@ -12,11 +12,17 @@ void cmd_help() {
     terminal_writestring("  help  - Display this help message\n");
     terminal_writestring("  clear - Clear the screen\n");
     terminal_writestring("  echo  - Display the text that follows\n");
+    terminal_writestring("  crash - Crash the kernel\n");
 }
 
 void cmd_echo(const char* args) {
     terminal_writestring(args);
     terminal_writestring("\n");
+}
+
+void cmd_crash() {
+    volatile int* ptr = nullptr;
+    *ptr = 0;
 }
 
 void process_command() {
@@ -28,6 +34,8 @@ void process_command() {
         cmd_help();
     else if (strcmp(input_buffer, "clear") == 0)
         terminal_clear();
+    else if (strcmp(input_buffer, "crash") == 0)
+        cmd_crash();
     else if (input_buffer[0] != '\0') {
         terminal_writestring("Unknown command: ");
         terminal_writestring(input_buffer);
