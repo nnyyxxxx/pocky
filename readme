@@ -18,7 +18,7 @@ To build the OS image:
 2. Run: make
 
 RUNNING THE KERNEL
-To run the OS in QEMU with VNC display:
+To run the OS in QEMU:
 1. Run: make run - If it does not work, please try modifying the makefile in accordance with your system.
 
 CLEANING UP

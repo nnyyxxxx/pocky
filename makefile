@@ -76,6 +76,11 @@ $(OS_IMAGE): $(BOOTLOADER_BIN) $(BOOTLOADER_STAGE2_BIN) $(KERNEL_BIN)
 run: $(OS_IMAGE)
 	@echo "Killing any existing QEMU processes..."
 	-pkill -f qemu-system-x86_64 || true
+	qemu-system-x86_64 -drive file=build/os.img,format=raw,if=floppy -display gtk
+
+run_vnc: $(OS_IMAGE)
+	@echo "Killing any existing QEMU processes..."
+	-pkill -f qemu-system-x86_64 || true
 	qemu-system-x86_64 -drive file=build/os.img,format=raw,if=floppy -display vnc=127.0.0.1:0 &
 	@echo "Waiting for QEMU to start..."
 	@sleep 1
@@ -88,4 +93,4 @@ clean:
 format:
 	clang-format -i $(KERNEL_CPP_SRCS)
 
-.PHONY: all run clean format
+.PHONY: all run run_vnc clean format
