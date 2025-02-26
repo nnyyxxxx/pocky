@@ -12,6 +12,9 @@ extern "C" void kernel_main() {
 
     terminal_initialize();
 
+    terminal_writestring("Welcome to the Kernel!\n");
+    terminal_writestring("Type 'help' to see the list of available commands.\n\n");
+
     init_pic();
 
     init_keyboard();
