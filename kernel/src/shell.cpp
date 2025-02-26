@@ -45,3 +45,8 @@ void process_command() {
     memset(input_buffer, 0, sizeof(input_buffer));
     input_pos = 0;
 }
+
+void init_shell() {
+    memset(input_buffer, 0, sizeof(input_buffer));
+    input_pos = 0;
+}

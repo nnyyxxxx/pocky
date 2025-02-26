@@ -11,6 +11,7 @@ extern "C" void kernel_main() {
     *((volatile uint32_t*)0xB8008) = 0x4F214F21;
 
     terminal_initialize();
+    init_shell();
 
     terminal_writestring("Welcome to the Kernel!\n");
     terminal_writestring("Type 'help' to see the list of available commands.\n\n");
