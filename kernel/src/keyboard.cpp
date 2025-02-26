@@ -18,12 +18,8 @@ static const char keyboard_map[128] = {
 };
 
 char keyboard_read() {
-    if (inb(KEYBOARD_STATUS_PORT) & 1) {
-        uint8_t scancode = inb(KEYBOARD_DATA_PORT);
-
-        if (scancode < 128) return keyboard_map[scancode];
-    }
-
+    uint8_t scancode = inb(KEYBOARD_DATA_PORT);
+    if (scancode < 128) return keyboard_map[scancode];
     return 0;
 }
 
@@ -38,7 +34,6 @@ void process_keypress(char c) {
     if (c == '\n') {
         terminal_putchar('\n');
         process_command();
-        terminal_writestring("$ ");
     } else if (c == '\b' && input_pos > 0) {
         input_pos--;
         input_buffer[input_pos] = '\0';

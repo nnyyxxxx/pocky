@@ -3,6 +3,7 @@
 
 extern char input_buffer[256];
 extern size_t input_pos;
+extern bool handling_exception;
 
 void process_command();
 void cmd_help();

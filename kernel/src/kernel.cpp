@@ -1,4 +1,5 @@
 #include "gdt.hpp"
+#include "idt.hpp"
 #include "io.hpp"
 #include "keyboard.hpp"
 #include "pic.hpp"
@@ -16,29 +17,29 @@ extern "C" void kernel_main() {
     vga[80] = 0x0E00 | '>';
 
     init_gdt();
-
     vga[81] = 0x0200 | 'G';
     vga[82] = 0x0200 | 'D';
     vga[83] = 0x0200 | 'T';
 
-    terminal_initialize();
-    vga[84] = 0x0400 | 'T';
-
-    init_shell();
-    vga[85] = 0x0400 | 'S';
-
     init_pic();
-    vga[86] = 0x0100 | 'P';
+    vga[84] = 0x0100 | 'P';
+
+    init_idt();
+    vga[85] = 0x0100 | 'I';
 
     init_keyboard();
-    vga[87] = 0x0100 | 'K';
+    vga[86] = 0x0100 | 'K';
+
+    terminal_initialize();
+    vga[87] = 0x0400 | 'T';
+
+    init_shell();
+    vga[88] = 0x0400 | 'S';
 
     terminal_writestring("Welcome to the Kernel!\n");
     terminal_writestring("Type 'help' to see the list of available commands.\n\n");
     terminal_writestring("$ ");
 
-    for (;;) {
-        char c = keyboard_read();
-        if (c != 0) process_keypress(c);
-    }
+    for (;;)
+        asm volatile("hlt");
 }

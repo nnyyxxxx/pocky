@@ -10,9 +10,11 @@ BUILD_DIR = build
 
 KERNEL_CPP_SRCS = $(KERNEL_SRC)/kernel.cpp $(KERNEL_SRC)/lib.cpp $(KERNEL_SRC)/io.cpp \
                   $(KERNEL_SRC)/vga.cpp $(KERNEL_SRC)/terminal.cpp $(KERNEL_SRC)/keyboard.cpp \
-                  $(KERNEL_SRC)/pic.cpp $(KERNEL_SRC)/shell.cpp $(KERNEL_SRC)/gdt.cpp
+                  $(KERNEL_SRC)/pic.cpp $(KERNEL_SRC)/shell.cpp $(KERNEL_SRC)/gdt.cpp \
+                  $(KERNEL_SRC)/idt.cpp
 
-KERNEL_ASM_SRCS = $(KERNEL_SRC)/entry.asm $(KERNEL_SRC)/gdt.asm
+KERNEL_ASM_SRCS = $(KERNEL_SRC)/entry.asm $(KERNEL_SRC)/gdt.asm $(KERNEL_SRC)/idt.asm \
+                  $(KERNEL_SRC)/isr.asm
 
 KERNEL_CPP_OBJS = $(patsubst $(KERNEL_SRC)/%.cpp,$(BUILD_DIR)/%.o,$(KERNEL_CPP_SRCS))
 KERNEL_ASM_OBJS = $(patsubst $(KERNEL_SRC)/%.asm,$(BUILD_DIR)/%_asm.o,$(KERNEL_ASM_SRCS))
@@ -45,11 +47,11 @@ $(KERNEL_BIN): $(KERNEL_OBJ) kernel/linker.ld | $(BUILD_DIR)
 	$(LD) -T kernel/linker.ld -m elf_x86_64 -nostdlib $(KERNEL_OBJ) -o $(BUILD_DIR)/kernel_elf.bin
 	objcopy -O binary $(BUILD_DIR)/kernel_elf.bin $@
 
-$(OS_IMAGE): $(BOOTLOADER_BIN) $(BOOTLOADER_STAGE2_BIN) $(KERNEL_BIN) | $(BUILD_DIR)
-	dd if=/dev/zero of=$(OS_IMAGE) bs=512 count=2880
-	dd if=$(BOOTLOADER_BIN) of=$(OS_IMAGE) conv=notrunc
-	dd if=$(BOOTLOADER_STAGE2_BIN) of=$(OS_IMAGE) seek=1 conv=notrunc bs=512
-	dd if=$(KERNEL_BIN) of=$(OS_IMAGE) seek=9 conv=notrunc bs=512
+$(OS_IMAGE): $(BOOTLOADER_BIN) $(BOOTLOADER_STAGE2_BIN) $(KERNEL_BIN)
+	dd if=/dev/zero of=$@ bs=512 count=2880
+	dd if=$(BOOTLOADER_BIN) of=$@ conv=notrunc
+	dd if=$(BOOTLOADER_STAGE2_BIN) of=$@ bs=512 seek=1 conv=notrunc
+	dd if=$(KERNEL_BIN) of=$@ bs=512 seek=8 conv=notrunc
 
 run: $(OS_IMAGE)
 	@echo "Killing any existing QEMU processes..."
@@ -64,6 +66,6 @@ clean:
 	rm -rf $(BUILD_DIR)
 
 format:
-	find kernel -type f \( -name "*.cpp" -o -name "*.h" -o -name "*.hpp" -o -name "*.cc" -o -name "*.c" \) -exec clang-format -i {} \;
+	clang-format -i $(KERNEL_CPP_SRCS)
 
 .PHONY: all run clean format

@@ -6,13 +6,14 @@
 
 char input_buffer[256] = {0};
 size_t input_pos = 0;
+bool handling_exception = false;
 
 void cmd_help() {
     terminal_writestring("Available commands:\n");
     terminal_writestring("  help  - Display this help message\n");
     terminal_writestring("  clear - Clear the screen\n");
     terminal_writestring("  echo  - Display the text that follows\n");
-    terminal_writestring("  crash - Crash the kernel\n");
+    terminal_writestring("  crash - Crash the kernel - Gets caught by the exception handler\n");
 }
 
 void cmd_echo(const char* args) {
@@ -26,6 +27,12 @@ void cmd_crash() {
 }
 
 void process_command() {
+    if (handling_exception) {
+        handling_exception = false;
+        terminal_writestring("");
+        return;
+    }
+
     if (strncmp(input_buffer, "echo ", 5) == 0)
         cmd_echo(input_buffer + 5);
     else if (strcmp(input_buffer, "echo") == 0)
@@ -44,9 +51,11 @@ void process_command() {
 
     memset(input_buffer, 0, sizeof(input_buffer));
     input_pos = 0;
+    terminal_writestring("$ ");
 }
 
 void init_shell() {
     memset(input_buffer, 0, sizeof(input_buffer));
     input_pos = 0;
+    handling_exception = false;
 }
