@@ -5,22 +5,21 @@ KERNEL_OFFSET equ 0x100000
 KERNEL_SECTORS equ 24
 
 start:
-    mov si, msg_stage2
-    call print_string
+    call clear_screen
 
     mov si, msg_boot_prompt
     call print_string
     call wait_key
 
-    mov si, msg_load_kernel
-    call print_string
     call load_kernel
-
-    mov si, msg_64bit
-    call print_string
-
     cli
     call switch_to_pm
+
+clear_screen:
+    mov ah, 0x00
+    mov al, 0x03
+    int 0x10
+    ret
 
 wait_key:
     mov ah, 0
@@ -80,9 +79,6 @@ count_error:
 
 boot_drive db 0
 
-msg_stage2 db 'Second-stage bootloader started', 13, 10, 0
 msg_boot_prompt db 'Press any key to boot into kernel...', 13, 10, 0
-msg_load_kernel db 'Loading kernel...', 13, 10, 0
-msg_64bit db 'Transitioning to 64-bit mode...', 13, 10, 0
 msg_disk_error db 'Disk error!', 13, 10, 0
 msg_count_error db 'Sector count mismatch!', 13, 10, 0

@@ -16,15 +16,7 @@ start:
     mov ax, 0x0003
     int 0x10
 
-    mov si, msg_boot
-    call print_string
-
-    mov si, msg_load_stage2
-    call print_string
     call load_second_stage
-
-    mov si, msg_jump_stage2
-    call print_string
     jmp SECOND_STAGE_ADDRESS
 
 print_string:
@@ -64,9 +56,6 @@ disk_error:
 
 boot_drive db 0
 
-msg_boot db 'First-stage boot', 13, 10, 0
-msg_load_stage2 db 'Loading second stage...', 13, 10, 0
-msg_jump_stage2 db 'Jumping to second stage...', 13, 10, 0
 msg_disk_error db 'Disk error!', 13, 10, 0
 
 times 510-($-$$) db 0
