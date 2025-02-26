@@ -2,7 +2,7 @@
 [ORG 0x8000]
 
 KERNEL_OFFSET equ 0x100000
-KERNEL_SECTORS equ 24
+KERNEL_SECTORS equ 128
 
 start:
     call clear_screen
