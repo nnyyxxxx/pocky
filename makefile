@@ -10,12 +10,12 @@ BUILD_DIR = build
 
 KERNEL_CPP_SRCS = $(KERNEL_SRC)/kernel.cpp $(KERNEL_SRC)/lib.cpp $(KERNEL_SRC)/io.cpp \
                   $(KERNEL_SRC)/vga.cpp $(KERNEL_SRC)/terminal.cpp $(KERNEL_SRC)/keyboard.cpp \
-                  $(KERNEL_SRC)/pic.cpp $(KERNEL_SRC)/shell.cpp
+                  $(KERNEL_SRC)/pic.cpp $(KERNEL_SRC)/shell.cpp $(KERNEL_SRC)/gdt.cpp
 
-KERNEL_ASM_SRCS = $(KERNEL_SRC)/entry.asm
+KERNEL_ASM_SRCS = $(KERNEL_SRC)/entry.asm $(KERNEL_SRC)/gdt.asm
 
 KERNEL_CPP_OBJS = $(patsubst $(KERNEL_SRC)/%.cpp,$(BUILD_DIR)/%.o,$(KERNEL_CPP_SRCS))
-KERNEL_ASM_OBJS = $(patsubst $(KERNEL_SRC)/%.asm,$(BUILD_DIR)/%.o,$(KERNEL_ASM_SRCS))
+KERNEL_ASM_OBJS = $(patsubst $(KERNEL_SRC)/%.asm,$(BUILD_DIR)/%_asm.o,$(KERNEL_ASM_SRCS))
 
 KERNEL_OBJ = $(KERNEL_ASM_OBJS) $(KERNEL_CPP_OBJS)
 
@@ -32,7 +32,7 @@ $(BUILD_DIR):
 $(BUILD_DIR)/%.o: $(KERNEL_SRC)/%.cpp | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/%.o: $(KERNEL_SRC)/%.asm | $(BUILD_DIR)
+$(BUILD_DIR)/%_asm.o: $(KERNEL_SRC)/%.asm | $(BUILD_DIR)
 	$(AS) -f elf64 $< -o $@
 
 $(BOOTLOADER_BIN): $(BOOTLOADER_SRC)/boot.asm | $(BUILD_DIR)
