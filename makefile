@@ -24,7 +24,7 @@ BOOTLOADER_STAGE2_BIN = $(BUILD_DIR)/stage2.bin
 KERNEL_BIN = $(BUILD_DIR)/kernel.bin
 OS_IMAGE = $(BUILD_DIR)/os.img
 
-all: clean $(OS_IMAGE)
+all: format clean $(OS_IMAGE)
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
@@ -63,4 +63,7 @@ run: $(OS_IMAGE)
 clean:
 	rm -rf $(BUILD_DIR)
 
-.PHONY: all run clean
+format:
+	find kernel -type f \( -name "*.cpp" -o -name "*.h" -o -name "*.hpp" -o -name "*.cc" -o -name "*.c" \) -exec clang-format -i {} \;
+
+.PHONY: all run clean format
