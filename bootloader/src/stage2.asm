@@ -8,6 +8,10 @@ start:
     mov si, msg_stage2
     call print_string
 
+    mov si, msg_boot_prompt
+    call print_string
+    call wait_key
+
     mov si, msg_load_kernel
     call print_string
     call load_kernel
@@ -18,6 +22,10 @@ start:
     cli
     call switch_to_pm
 
+wait_key:
+    mov ah, 0
+    int 0x16
+    ret
 
 print_string:
     lodsb
@@ -73,6 +81,7 @@ count_error:
 boot_drive db 0
 
 msg_stage2 db 'Second-stage bootloader started', 13, 10, 0
+msg_boot_prompt db 'Press any key to boot into kernel...', 13, 10, 0
 msg_load_kernel db 'Loading kernel...', 13, 10, 0
 msg_64bit db 'Transitioning to 64-bit mode...', 13, 10, 0
 msg_disk_error db 'Disk error!', 13, 10, 0
