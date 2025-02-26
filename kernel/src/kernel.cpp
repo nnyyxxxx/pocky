@@ -20,8 +20,7 @@ extern "C" void kernel_main() {
 
     for (;;) {
         char c = keyboard_read();
-        if (c != 0) {
+        if (c != 0)
             process_keypress(c);
-        }
     }
 }
