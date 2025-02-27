@@ -9,4 +9,5 @@ void process_command();
 void cmd_help();
 void cmd_echo(const char* args);
 void cmd_crash();
+void cmd_shutdown();
 void init_shell();
