@@ -149,7 +149,7 @@ extern "C" void isr_handler(InterruptFrame* frame) {
         memset(input_buffer, 0, sizeof(input_buffer));
         input_pos = 0;
 
-        if (!crash_loop_enabled) frame->rip += 8;
+        frame->rip += 8;
 
         process_command();
         return;
