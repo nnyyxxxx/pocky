@@ -17,7 +17,7 @@ KERNEL_CPP_SRCS = $(KERNEL_SRC)/core/kernel.cpp $(KERNEL_SRC)/lib/lib.cpp $(KERN
                   $(KERNEL_SRC)/hw/pic.cpp $(KERNEL_SRC)/shell/shell.cpp $(KERNEL_SRC)/hw/gdt.cpp \
                   $(KERNEL_SRC)/hw/idt.cpp $(KERNEL_SRC)/memory/physical_memory.cpp \
                   $(KERNEL_SRC)/memory/virtual_memory.cpp $(KERNEL_SRC)/memory/heap.cpp \
-                  $(KERNEL_SRC)/core/init.cpp
+                  $(KERNEL_SRC)/core/init.cpp $(KERNEL_SRC)/core/elf.cpp $(KERNEL_SRC)/core/dynamic_linker.cpp
 
 KERNEL_ASM_SRCS = $(KERNEL_SRC)/asm/entry.asm $(KERNEL_SRC)/asm/gdt.asm $(KERNEL_SRC)/asm/idt.asm \
                   $(KERNEL_SRC)/asm/isr.asm

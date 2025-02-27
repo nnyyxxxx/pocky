@@ -63,8 +63,7 @@ void cmd_shutdown() {
 
 void cmd_crash_loop() {
     command_running = true;
-    terminal_writestring(
-        "Starting crash loop...\n");
+    terminal_writestring("Starting crash loop...\n");
     crash_loop_enabled = true;
 
     volatile int* ptr = nullptr;

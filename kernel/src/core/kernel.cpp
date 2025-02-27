@@ -1,3 +1,4 @@
+#include "elf.hpp"
 #include "gdt.hpp"
 #include "heap.hpp"
 #include "idt.hpp"
@@ -70,16 +71,24 @@ extern "C" void kernel_main() {
     heap.initialize(heap_start, HEAP_SIZE);
     vga[95] = 0x0500 | '8';
 
+    if (kernel::DynamicLinker::initialize())
+        vga[96] = 0x0300 | 'D';
+    else
+        vga[96] = 0x0C00 | 'D';
+
     terminal_initialize();
-    vga[96] = 0x0500 | '9';
+    vga[97] = 0x0500 | '9';
 
     init_shell();
-    vga[97] = 0x0500 | 'A';
+    vga[98] = 0x0500 | 'A';
 
     terminal_writestring("Welcome to the Kernel!\n");
     terminal_writestring("Type 'help' to see the list of available commands.\n\n");
     terminal_writestring("$ ");
 
-    for (;;)
+    asm volatile("sti");
+
+    for (;;) {
         asm volatile("hlt");
+    }
 }

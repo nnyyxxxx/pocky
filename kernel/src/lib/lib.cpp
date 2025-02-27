@@ -76,3 +76,25 @@ extern "C" [[noreturn]] void __stack_chk_fail() {
 }
 
 uintptr_t __stack_chk_guard = 0xDEADBEEFDEADBEEF;
+
+extern "C" int memcmp(const void* s1, const void* s2, size_t n) {
+    const unsigned char* p1 = static_cast<const unsigned char*>(s1);
+    const unsigned char* p2 = static_cast<const unsigned char*>(s2);
+
+    for (size_t i = 0; i < n; i++) {
+        if (p1[i] != p2[i]) return p1[i] - p2[i];
+    }
+
+    return 0;
+}
+
+extern "C" char* strcpy(char* dest, const char* src) {
+    char* originalDest = dest;
+
+    while (*src) {
+        *dest++ = *src++;
+    }
+
+    *dest = '\0';
+    return originalDest;
+}
