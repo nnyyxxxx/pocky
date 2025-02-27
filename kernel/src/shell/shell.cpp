@@ -20,7 +20,7 @@ void cmd_help() {
     terminal_writestring("  echo       - Display the text that follows\n");
     terminal_writestring(
         "  crash      - Crash the kernel - Gets caught by the exception handler\n");
-    terminal_writestring("  crash_loop - Repeatedly crash the kernel (CTRL+C to stop)\n");
+    terminal_writestring("  crash_loop - Repeatedly crash the kernel\n");
     terminal_writestring("  shutdown   - Power off the system\n");
     terminal_writestring("\n");
     command_running = false;
@@ -64,7 +64,7 @@ void cmd_shutdown() {
 void cmd_crash_loop() {
     command_running = true;
     terminal_writestring(
-        "Starting crash loop... System will repeatedly crash until you press CTRL+C\n");
+        "Starting crash loop...\n");
     crash_loop_enabled = true;
 
     volatile int* ptr = nullptr;
@@ -87,7 +87,7 @@ void process_command() {
         handling_exception = false;
 
         if (crash_loop_enabled) {
-            terminal_writestring("Restarting crash loop... Press CTRL+C to stop\n");
+            terminal_writestring("Restarting crash loop...\n");
             for (volatile int i = 0; i < 5000000; i++)
                 ;
             volatile int* ptr = nullptr;
