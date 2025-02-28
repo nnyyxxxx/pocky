@@ -6,6 +6,10 @@ extern size_t input_pos;
 extern bool handling_exception;
 extern bool command_running;
 
+constexpr size_t MAX_HISTORY_SIZE = 1000;
+extern char command_history[MAX_HISTORY_SIZE][256];
+extern size_t history_count;
+
 void process_keypress(char c);
 void process_command();
 void cmd_help();

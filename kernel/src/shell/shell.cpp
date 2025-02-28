@@ -14,6 +14,9 @@ size_t input_pos = 0;
 bool handling_exception = false;
 bool command_running = false;
 
+char command_history[MAX_HISTORY_SIZE][256] = {0};
+size_t history_count = 0;
+
 namespace {
 
 void split_path(const char* input, char* first, char* second) {
@@ -77,6 +80,7 @@ void cmd_help() {
     terminal_writestring("  mv       - Move/rename a file\n");
     terminal_writestring("  rm       - Remove a file or directory\n");
     terminal_writestring("  touch    - Create an empty file\n");
+    terminal_writestring("  history  - Show command history\n");
     terminal_writestring("  shutdown - Power off the system\n");
     terminal_writestring("\n");
     command_running = false;
@@ -336,6 +340,21 @@ void cmd_touch(const char* path) {
     }
 }
 
+void cmd_history() {
+    command_running = true;
+
+    for (size_t i = 0; i < history_count; i++) {
+        char line_num[8] = {0};
+        snprintf(line_num, sizeof(line_num), "%4zu", i + 1);
+        terminal_writestring(line_num);
+        terminal_writestring("  ");
+        terminal_writestring(command_history[i]);
+        terminal_writestring("\n");
+    }
+
+    command_running = false;
+}
+
 void interrupt_command() {
     if (command_running) {
         terminal_writestring("\nCommand interrupted\n");
@@ -348,6 +367,16 @@ void process_command() {
         terminal_writestring("\n$ ");
         handling_exception = false;
         return;
+    }
+
+    if (input_buffer[0] != '\0') {
+        if (history_count < MAX_HISTORY_SIZE) {
+            strcpy(command_history[history_count], input_buffer);
+            history_count++;
+        } else {
+            memmove(command_history[0], command_history[1], (MAX_HISTORY_SIZE - 1) * 256);
+            strcpy(command_history[MAX_HISTORY_SIZE - 1], input_buffer);
+        }
     }
 
     char* args = strchr(input_buffer, ' ');
@@ -384,6 +413,8 @@ void process_command() {
         cmd_rm(args);
     else if (strcmp(input_buffer, "touch") == 0)
         cmd_touch(args);
+    else if (strcmp(input_buffer, "history") == 0)
+        cmd_history();
     else if (strcmp(input_buffer, "shutdown") == 0 || strcmp(input_buffer, "poweroff") == 0)
         cmd_shutdown();
     else if (input_buffer[0] != '\0') {
@@ -401,7 +432,9 @@ void process_command() {
 
 void init_shell() {
     memset(input_buffer, 0, sizeof(input_buffer));
+    memset(command_history, 0, sizeof(command_history));
     input_pos = 0;
+    history_count = 0;
     handling_exception = false;
     command_running = false;
 }
