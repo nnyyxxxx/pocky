@@ -398,9 +398,16 @@ void handle_redirection(const char* command) {
     input_pos = 0;
 }
 
+void print_prompt() {
+    auto& fs = fs::FileSystem::instance();
+    terminal_writestring(fs.get_current_path());
+    terminal_writestring(" $ ");
+}
+
 void process_command() {
     if (handling_exception) {
-        terminal_writestring("\n$ ");
+        terminal_writestring("\n");
+        print_prompt();
         handling_exception = false;
         return;
     }
@@ -417,7 +424,7 @@ void process_command() {
 
     if (strchr(input_buffer, '>')) {
         handle_redirection(input_buffer);
-        terminal_writestring("$ ");
+        print_prompt();
         return;
     }
 
@@ -466,7 +473,7 @@ void process_command() {
     }
 
     if (!handling_exception) {
-        terminal_writestring("$ ");
+        print_prompt();
         memset(input_buffer, 0, sizeof(input_buffer));
         input_pos = 0;
     }
@@ -479,4 +486,6 @@ void init_shell() {
     history_count = 0;
     handling_exception = false;
     command_running = false;
+    terminal_writestring("\n");
+    print_prompt();
 }

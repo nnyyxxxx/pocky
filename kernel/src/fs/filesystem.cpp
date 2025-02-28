@@ -227,4 +227,38 @@ void FileSystem::list_directory(const char* path, void (*callback)(const FileNod
     }
 }
 
+void FileSystem::build_path(FileNode* node, char* buffer, size_t size) const {
+    if (node == m_root) {
+        buffer[0] = '/';
+        buffer[1] = '\0';
+        return;
+    }
+
+    if (node->parent) build_path(node->parent, buffer, size);
+
+    if (node != m_root) {
+        size_t len = strlen(buffer);
+        if (len > 1 && len + 1 < size) {
+            buffer[len] = '/';
+            buffer[len + 1] = '\0';
+            len++;
+        }
+
+        size_t name_len = strlen(node->name);
+        if (len + name_len < size) {
+            size_t i;
+            for (i = 0; i < name_len && len + i < size; i++) {
+                buffer[len + i] = node->name[i];
+            }
+            buffer[len + i] = '\0';
+        }
+    }
+}
+
+const char* FileSystem::get_current_path() const {
+    m_path_buffer[0] = '\0';
+    build_path(m_current_dir, m_path_buffer, MAX_PATH);
+    return m_path_buffer;
+}
+
 }  // namespace fs

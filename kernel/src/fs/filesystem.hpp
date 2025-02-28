@@ -40,6 +40,7 @@ public:
     FileNode* get_current_directory() const { return m_current_dir; }
     bool change_directory(const char* path);
     void list_directory(const char* path, void (*callback)(const FileNode*));
+    const char* get_current_path() const;
 
 private:
     FileSystem() = default;
@@ -49,9 +50,11 @@ private:
 
     FileNode* resolve_path(const char* path);
     FileNode* create_node(const char* name, FileType type);
+    void build_path(FileNode* node, char* buffer, size_t size) const;
 
     FileNode* m_root = nullptr;
     FileNode* m_current_dir = nullptr;
+    mutable char m_path_buffer[MAX_PATH] = {0};
 };
 
 } // namespace fs

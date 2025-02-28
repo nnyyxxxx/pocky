@@ -99,11 +99,10 @@ extern "C" void kernel_main() {
     kernel::DynamicLinker::initialize();
 
     terminal_initialize();
-    init_shell();
-
     terminal_writestring("Welcome to the Kernel!\n");
-    terminal_writestring("Type 'help' to see the list of available commands.\n\n");
-    terminal_writestring("$ ");
+    terminal_writestring("Type 'help' to see the list of available commands.\n");
+
+    init_shell();
 
     asm volatile("sti");
     for (;;) {
