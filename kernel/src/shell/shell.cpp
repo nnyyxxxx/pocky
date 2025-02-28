@@ -8,6 +8,7 @@
 #include "physical_memory.hpp"
 #include "printf.hpp"
 #include "terminal.hpp"
+#include "timer.hpp"
 #include "vga.hpp"
 
 char input_buffer[256] = {0};
@@ -75,6 +76,7 @@ void cmd_help() {
     terminal_writestring("  rm       - Remove a file or directory\n");
     terminal_writestring("  touch    - Create an empty file\n");
     terminal_writestring("  history  - Show command history\n");
+    terminal_writestring("  uptime   - Show system uptime\n");
     terminal_writestring("  shutdown - Power off the system\n");
     terminal_writestring("  TAB      - Auto-complete a dir,file, this is not a command\n");
     terminal_writestring("\n");
@@ -349,6 +351,19 @@ void cmd_history() {
     command_running = false;
 }
 
+void cmd_uptime() {
+    command_running = true;
+
+    char uptime_str[100] = {0};
+    format_uptime(uptime_str, sizeof(uptime_str));
+
+    terminal_writestring("System uptime: ");
+    terminal_writestring(uptime_str);
+    terminal_writestring("\n");
+
+    command_running = false;
+}
+
 void interrupt_command() {
     if (command_running) {
         terminal_writestring("\nCommand interrupted\n");
@@ -539,6 +554,8 @@ void process_command() {
         cmd_touch(args);
     else if (strcmp(input_buffer, "history") == 0)
         cmd_history();
+    else if (strcmp(input_buffer, "uptime") == 0)
+        cmd_uptime();
     else if (strcmp(input_buffer, "shutdown") == 0 || strcmp(input_buffer, "poweroff") == 0)
         cmd_shutdown();
     else if (input_buffer[0] != '\0') {

@@ -18,10 +18,10 @@ KERNEL_CPP_SRCS = $(KERNEL_SRC)/core/kernel.cpp $(KERNEL_SRC)/lib/lib.cpp $(KERN
                   $(KERNEL_SRC)/hw/idt.cpp $(KERNEL_SRC)/memory/physical_memory.cpp \
                   $(KERNEL_SRC)/memory/virtual_memory.cpp $(KERNEL_SRC)/memory/heap.cpp \
                   $(KERNEL_SRC)/core/init.cpp $(KERNEL_SRC)/core/elf.cpp $(KERNEL_SRC)/core/dynamic_linker.cpp \
-                  $(KERNEL_SRC)/lib/printf.cpp $(KERNEL_SRC)/fs/filesystem.cpp
+                  $(KERNEL_SRC)/lib/printf.cpp $(KERNEL_SRC)/fs/filesystem.cpp $(KERNEL_SRC)/hw/timer.cpp
 
 KERNEL_ASM_SRCS = $(KERNEL_SRC)/asm/entry.asm $(KERNEL_SRC)/asm/gdt.asm $(KERNEL_SRC)/asm/idt.asm \
-                  $(KERNEL_SRC)/asm/isr.asm $(KERNEL_SRC)/asm/vm.asm
+                  $(KERNEL_SRC)/asm/isr.asm $(KERNEL_SRC)/asm/vm.asm $(KERNEL_SRC)/asm/timer.asm
 
 KERNEL_CPP_OBJS = $(patsubst $(KERNEL_SRC)/%.cpp,$(BUILD_DIR)/%.o,$(KERNEL_CPP_SRCS))
 KERNEL_ASM_OBJS = $(patsubst $(KERNEL_SRC)/asm/%.asm,$(BUILD_DIR)/asm/%_asm.o,$(KERNEL_ASM_SRCS))

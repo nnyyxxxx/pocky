@@ -9,6 +9,7 @@
 #include "pic.hpp"
 #include "shell.hpp"
 #include "terminal.hpp"
+#include "timer.hpp"
 #include "vga.hpp"
 #include "virtual_memory.hpp"
 
@@ -85,15 +86,22 @@ extern "C" void kernel_main() {
         vga[i + 640] = 0x0F00 | msg9[i];
     }
 
+    init_timer(100);
+
+    const char* msg10 = "[10] Timer Init Done";
+    for (int i = 0; msg10[i] != '\0'; i++) {
+        vga[i + 720] = 0x0F00 | msg10[i];
+    }
+
     auto& heap = HeapAllocator::instance();
     heap.initialize(heap_start, HEAP_SIZE);
 
     auto& fs = fs::FileSystem::instance();
     fs.initialize();
 
-    const char* msg10 = "[10] Filesystem Init Done";
-    for (int i = 0; msg10[i] != '\0'; i++) {
-        vga[i + 720] = 0x0F00 | msg10[i];
+    const char* msg11 = "[11] Filesystem Init Done";
+    for (int i = 0; msg11[i] != '\0'; i++) {
+        vga[i + 800] = 0x0F00 | msg11[i];
     }
 
     kernel::DynamicLinker::initialize();

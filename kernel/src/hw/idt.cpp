@@ -308,7 +308,10 @@ extern "C" void isr_handler(InterruptFrame* frame) {
         if (irq >= 8) outb(PIC2_COMMAND, 0x20);
         outb(PIC1_COMMAND, 0x20);
 
-        if (irq == 1) {
+        if (irq == 0) {
+            // timer interrupt (IRQ0) - timer_callback is called directly from timer_handler in
+            // assembly
+        } else if (irq == 1) {
             char c = keyboard_read();
             if (c != 0) process_keypress(c);
         }

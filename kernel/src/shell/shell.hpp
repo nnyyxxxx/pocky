@@ -26,6 +26,7 @@ void cmd_mv(const char* args);
 void cmd_rm(const char* path);
 void cmd_touch(const char* path);
 void cmd_history();
+void cmd_uptime();
 void init_shell();
 void interrupt_command();
 void handle_tab_completion();
