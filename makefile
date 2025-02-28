@@ -6,7 +6,7 @@ ASFLAGS = -I$(BOOTLOADER_SRC)
 
 CXXFLAGS = -m64 -std=c++14 -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-rtti -fstack-protector-strong \
            -I$(KERNEL_SRC) -I$(KERNEL_SRC)/hw -I$(KERNEL_SRC)/core -I$(KERNEL_SRC)/shell \
-           -I$(KERNEL_SRC)/drivers -I$(KERNEL_SRC)/lib -I$(KERNEL_SRC)/memory
+           -I$(KERNEL_SRC)/drivers -I$(KERNEL_SRC)/lib -I$(KERNEL_SRC)/memory -I$(KERNEL_SRC)/fs
 
 KERNEL_SRC = kernel/src
 BOOTLOADER_SRC = bootloader/src
@@ -18,13 +18,13 @@ KERNEL_CPP_SRCS = $(KERNEL_SRC)/core/kernel.cpp $(KERNEL_SRC)/lib/lib.cpp $(KERN
                   $(KERNEL_SRC)/hw/idt.cpp $(KERNEL_SRC)/memory/physical_memory.cpp \
                   $(KERNEL_SRC)/memory/virtual_memory.cpp $(KERNEL_SRC)/memory/heap.cpp \
                   $(KERNEL_SRC)/core/init.cpp $(KERNEL_SRC)/core/elf.cpp $(KERNEL_SRC)/core/dynamic_linker.cpp \
-                  $(KERNEL_SRC)/lib/printf.cpp
+                  $(KERNEL_SRC)/lib/printf.cpp $(KERNEL_SRC)/fs/filesystem.cpp
 
 KERNEL_ASM_SRCS = $(KERNEL_SRC)/asm/entry.asm $(KERNEL_SRC)/asm/gdt.asm $(KERNEL_SRC)/asm/idt.asm \
                   $(KERNEL_SRC)/asm/isr.asm $(KERNEL_SRC)/asm/vm.asm
 
 KERNEL_CPP_OBJS = $(patsubst $(KERNEL_SRC)/%.cpp,$(BUILD_DIR)/%.o,$(KERNEL_CPP_SRCS))
-KERNEL_ASM_OBJS = $(patsubst $(KERNEL_SRC)/%.asm,$(BUILD_DIR)/%_asm.o,$(KERNEL_ASM_SRCS))
+KERNEL_ASM_OBJS = $(patsubst $(KERNEL_SRC)/asm/%.asm,$(BUILD_DIR)/asm/%_asm.o,$(KERNEL_ASM_SRCS))
 
 KERNEL_OBJ = $(KERNEL_ASM_OBJS) $(KERNEL_CPP_OBJS)
 
@@ -43,6 +43,7 @@ $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)/drivers
 	mkdir -p $(BUILD_DIR)/asm
 	mkdir -p $(BUILD_DIR)/memory
+	mkdir -p $(BUILD_DIR)/fs
 
 $(BUILD_DIR)/%.o: $(KERNEL_SRC)/%.cpp | $(BUILD_DIR)
 	@mkdir -p $(dir $@)

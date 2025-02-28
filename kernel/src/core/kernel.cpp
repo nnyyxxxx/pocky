@@ -1,4 +1,5 @@
 #include "elf.hpp"
+#include "fs/filesystem.hpp"
 #include "gdt.hpp"
 #include "heap.hpp"
 #include "idt.hpp"
@@ -86,6 +87,14 @@ extern "C" void kernel_main() {
 
     auto& heap = HeapAllocator::instance();
     heap.initialize(heap_start, HEAP_SIZE);
+
+    auto& fs = fs::FileSystem::instance();
+    fs.initialize();
+
+    const char* msg10 = "[10] Filesystem Init Done";
+    for (int i = 0; msg10[i] != '\0'; i++) {
+        vga[i + 720] = 0x0F00 | msg10[i];
+    }
 
     kernel::DynamicLinker::initialize();
 

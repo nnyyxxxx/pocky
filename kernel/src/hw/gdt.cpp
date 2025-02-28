@@ -53,8 +53,8 @@ void init_gdt() {
                       GDT_FLAGS_64BIT | GDT_FLAGS_4K_GRAN);
     vga[42] = 0x0400 | '3';
 
-    create_descriptor(gdt.kernel_data, 0, 0,
-                      GDT_PRESENT | GDT_DESCRIPTOR | GDT_READWRITE, GDT_FLAGS_4K_GRAN);
+    create_descriptor(gdt.kernel_data, 0, 0, GDT_PRESENT | GDT_DESCRIPTOR | GDT_READWRITE,
+                      GDT_FLAGS_4K_GRAN);
     vga[43] = 0x0400 | '4';
 
     create_descriptor(gdt.user_code, 0, 0,
@@ -62,8 +62,8 @@ void init_gdt() {
                       GDT_FLAGS_64BIT | GDT_FLAGS_4K_GRAN);
     vga[44] = 0x0400 | '5';
 
-    create_descriptor(gdt.user_data, 0, 0,
-                      GDT_PRESENT | GDT_DESCRIPTOR | GDT_USER | GDT_READWRITE, GDT_FLAGS_4K_GRAN);
+    create_descriptor(gdt.user_data, 0, 0, GDT_PRESENT | GDT_DESCRIPTOR | GDT_USER | GDT_READWRITE,
+                      GDT_FLAGS_4K_GRAN);
     vga[45] = 0x0400 | '6';
 
     gdtr.offset = reinterpret_cast<uint64_t>(&gdt);

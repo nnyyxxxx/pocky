@@ -1,6 +1,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "memory/heap.hpp"
 #include "terminal.hpp"
 
 extern "C" size_t strlen(const char* str) {
@@ -33,19 +34,17 @@ extern "C" int strncmp(const char* s1, const char* s2, size_t n) {
 }
 
 extern "C" void* memset(void* dest, int ch, size_t count) {
-    unsigned char* ptr = static_cast<unsigned char*>(dest);
-    while (count-- > 0) {
-        *ptr++ = ch;
-    }
+    uint8_t* d = reinterpret_cast<uint8_t*>(dest);
+    for (size_t i = 0; i < count; i++)
+        d[i] = static_cast<uint8_t>(ch);
     return dest;
 }
 
 extern "C" void* memcpy(void* dest, const void* src, size_t count) {
-    unsigned char* d = static_cast<unsigned char*>(dest);
-    const unsigned char* s = static_cast<const unsigned char*>(src);
-    while (count--) {
-        *d++ = *s++;
-    }
+    uint8_t* d = reinterpret_cast<uint8_t*>(dest);
+    const uint8_t* s = reinterpret_cast<const uint8_t*>(src);
+    for (size_t i = 0; i < count; i++)
+        d[i] = s[i];
     return dest;
 }
 
@@ -89,12 +88,67 @@ extern "C" int memcmp(const void* s1, const void* s2, size_t n) {
 }
 
 extern "C" char* strcpy(char* dest, const char* src) {
-    char* originalDest = dest;
+    char* d = dest;
+    while ((*d++ = *src++))
+        ;
+    return dest;
+}
 
-    while (*src) {
-        *dest++ = *src++;
+extern "C" char* strncpy(char* dest, const char* src, size_t count) {
+    char* d = dest;
+    while (count > 0 && *src) {
+        *d++ = *src++;
+        count--;
     }
+    while (count > 0) {
+        *d++ = '\0';
+        count--;
+    }
+    return dest;
+}
 
-    *dest = '\0';
-    return originalDest;
+extern "C" char* strchr(const char* str, int ch) {
+    while (*str && *str != ch)
+        str++;
+    return *str == ch ? const_cast<char*>(str) : nullptr;
+}
+
+extern "C" char* strrchr(const char* str, int ch) {
+    const char* last = nullptr;
+    while (*str) {
+        if (*str == ch) last = str;
+        str++;
+    }
+    return const_cast<char*>(last);
+}
+
+extern "C" int snprintf(char* str, size_t size, const char* format, ...) {
+    if (size == 0) return 0;
+    strncpy(str, format, size - 1);
+    str[size - 1] = '\0';
+    return strlen(str);
+}
+
+void* operator new(size_t size) {
+    return HeapAllocator::instance().allocate(size);
+}
+
+void* operator new[](size_t size) {
+    return HeapAllocator::instance().allocate(size);
+}
+
+void operator delete(void* ptr) noexcept {
+    HeapAllocator::instance().free(ptr);
+}
+
+void operator delete[](void* ptr) noexcept {
+    HeapAllocator::instance().free(ptr);
+}
+
+void operator delete(void* ptr, size_t) noexcept {
+    HeapAllocator::instance().free(ptr);
+}
+
+void operator delete[](void* ptr, size_t) noexcept {
+    HeapAllocator::instance().free(ptr);
 }
