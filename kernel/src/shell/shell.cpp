@@ -62,6 +62,7 @@ void list_callback(const fs::FileNode* node) {
 }  // namespace
 
 void cmd_help() {
+    terminal_writestring("\n");
     terminal_writestring("Available commands:\n");
     terminal_writestring("  help     - Show this help message\n");
     terminal_writestring("  echo     - Echo the arguments\n");
@@ -348,8 +349,6 @@ void process_command() {
         handling_exception = false;
         return;
     }
-
-    terminal_writestring("\n");
 
     char* args = strchr(input_buffer, ' ');
     if (args) {
