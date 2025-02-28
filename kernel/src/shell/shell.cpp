@@ -183,13 +183,14 @@ void cmd_mkdir(const char* path) {
 
 void cmd_cd(const char* path) {
     command_running = true;
+    auto& fs = fs::FileSystem::instance();
+
     if (!path || !*path) {
-        terminal_writestring("cd: missing operand\n");
+        fs.change_directory("/");
         command_running = false;
         return;
     }
 
-    auto& fs = fs::FileSystem::instance();
     if (!fs.change_directory(path)) {
         terminal_writestring("cd: cannot change directory to '");
         terminal_writestring(path);
