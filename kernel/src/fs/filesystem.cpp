@@ -50,6 +50,21 @@ bool FileSystem::initialize() {
         }
     }
 
+    FileNode* dir = create_file("directory", FileType::Directory);
+    if (dir) {
+        const char* dir_welcome = "this is a directory you can make more directories "
+                                  "or add files, have fun :)";
+        FileNode* example = create_file("directory/example", FileType::Regular);
+        if (example) {
+            size_t content_size = strlen(dir_welcome);
+            example->data = new uint8_t[content_size];
+            if (example->data) {
+                memcpy(example->data, dir_welcome, content_size);
+                example->size = content_size;
+            }
+        }
+    }
+
     return true;
 }
 
