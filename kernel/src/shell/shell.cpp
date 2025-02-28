@@ -40,13 +40,7 @@ void print_file_type(const fs::FileNode* node) {
     if (node->type == fs::FileType::Directory)
         terminal_writestring("d");
     else
-        terminal_writestring("-");
-}
-
-void print_file_size(const fs::FileNode* node) {
-    char size_str[32];
-    snprintf(size_str, sizeof(size_str), "%8zu", node->size);
-    terminal_writestring(size_str);
+        terminal_writestring("f");
 }
 
 void print_file_name(const fs::FileNode* node) {
@@ -57,7 +51,6 @@ void print_file_name(const fs::FileNode* node) {
 
 void list_callback(const fs::FileNode* node) {
     print_file_type(node);
-    print_file_size(node);
     print_file_name(node);
     terminal_writestring("\n");
 }
@@ -345,9 +338,7 @@ void cmd_history() {
     command_running = true;
 
     for (size_t i = 0; i < history_count; i++) {
-        char line_num[8] = {0};
-        snprintf(line_num, sizeof(line_num), "%4zu", i + 1);
-        terminal_writestring(line_num);
+        print_number(i + 1, 10, 4, false);
         terminal_writestring("  ");
         terminal_writestring(command_history[i]);
         terminal_writestring("\n");
