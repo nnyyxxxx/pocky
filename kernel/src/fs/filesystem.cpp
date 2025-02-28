@@ -71,12 +71,33 @@ FileNode* FileSystem::resolve_path(const char* path) {
             if (current->parent) current = current->parent;
         } else {
             FileNode* child = current->first_child;
+            FileNode* found_dir = nullptr;
+
+            bool is_last = !*end;
+            bool has_trailing_slash = is_last && (path[strlen(path) - 1] == '/');
+
             while (child) {
-                if (strcmp(child->name, component) == 0) break;
+                if (strcmp(child->name, component) == 0) {
+                    if (child->type == FileType::Regular) {
+                        if (is_last && !has_trailing_slash) {
+                            current = child;
+                            break;
+                        }
+                    } else if (child->type == FileType::Directory) {
+                        found_dir = child;
+                        if (!is_last || has_trailing_slash) {
+                            current = child;
+                            break;
+                        }
+                    }
+                }
                 child = child->next_sibling;
             }
-            if (!child && *end) return nullptr;
-            if (child) current = child;
+
+            if (!child && found_dir)
+                current = found_dir;
+            else if (!child && !found_dir && *end)
+                return nullptr;
         }
 
         if (!*end) break;
@@ -106,6 +127,12 @@ FileNode* FileSystem::create_file(const char* path, FileType type) {
 
     FileNode* parent = resolve_path(parent_path);
     if (!parent || parent->type != FileType::Directory) return nullptr;
+
+    FileNode* existing = parent->first_child;
+    while (existing) {
+        if (strcmp(existing->name, filename) == 0 && existing->type == type) return existing;
+        existing = existing->next_sibling;
+    }
 
     FileNode* node = create_node(filename, type);
     if (!node) return nullptr;

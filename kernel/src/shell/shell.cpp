@@ -362,6 +362,50 @@ void interrupt_command() {
     }
 }
 
+void handle_redirection(const char* command) {
+    const char* redirect = strchr(command, '>');
+    if (!redirect) return;
+
+    char text[256] = {0};
+    char filename[fs::MAX_PATH] = {0};
+
+    size_t text_len = redirect - command;
+    strncpy(text, command, text_len);
+
+    const char* file_start = redirect + 1;
+    while (*file_start == ' ')
+        file_start++;
+
+    strcpy(filename, file_start);
+    char* end = filename + strlen(filename) - 1;
+    while (end > filename && *end == ' ')
+        *end-- = '\0';
+
+    if (!*filename) {
+        terminal_writestring("No output file specified\n");
+        return;
+    }
+
+    auto& fs = fs::FileSystem::instance();
+    auto* file = fs.create_file(filename, fs::FileType::Regular);
+    if (!file) {
+        terminal_writestring("Failed to create file: ");
+        terminal_writestring(filename);
+        terminal_writestring("\n");
+        return;
+    }
+
+    char* text_end = text + strlen(text) - 1;
+    while (text_end > text && *text_end == ' ')
+        *text_end-- = '\0';
+
+    const uint8_t* data = reinterpret_cast<const uint8_t*>(text);
+    fs.write_file(filename, data, strlen(text));
+
+    memset(input_buffer, 0, sizeof(input_buffer));
+    input_pos = 0;
+}
+
 void process_command() {
     if (handling_exception) {
         terminal_writestring("\n$ ");
@@ -377,6 +421,12 @@ void process_command() {
             memmove(command_history[0], command_history[1], (MAX_HISTORY_SIZE - 1) * 256);
             strcpy(command_history[MAX_HISTORY_SIZE - 1], input_buffer);
         }
+    }
+
+    if (strchr(input_buffer, '>')) {
+        handle_redirection(input_buffer);
+        terminal_writestring("$ ");
+        return;
     }
 
     char* args = strchr(input_buffer, ' ');
