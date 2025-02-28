@@ -6,7 +6,7 @@
 
 uint16_t terminal_row = 0;
 uint16_t terminal_column = 0;
-uint8_t terminal_color = 0;
+uint8_t terminal_color = vga_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK);
 
 void terminal_initialize() {
     terminal_row = 0;

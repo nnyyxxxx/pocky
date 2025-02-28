@@ -11,5 +11,6 @@ void cmd_help();
 void cmd_echo(const char* args);
 void cmd_crash();
 void cmd_shutdown();
+void cmd_memory();
 void init_shell();
 void interrupt_command();

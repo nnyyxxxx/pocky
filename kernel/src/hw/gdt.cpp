@@ -1,5 +1,12 @@
 #include "gdt.hpp"
 
+extern "C" {
+uint32_t read_cr4();
+void write_cr4(uint32_t value);
+uint32_t read_cr0();
+void write_cr0(uint32_t value);
+}
+
 namespace {
 GDT gdt = {
     {0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0},
@@ -36,27 +43,26 @@ extern "C" void load_gdt(GDTDescriptor* gdtr);
 
 void init_gdt() {
     volatile uint16_t* vga = reinterpret_cast<uint16_t*>(0xB8000);
-
     vga[40] = 0x0400 | '1';
 
     create_descriptor(gdt.null, 0, 0, 0, 0);
     vga[41] = 0x0400 | '2';
 
-    create_descriptor(gdt.kernel_code, 0, 0xFFFFF,
+    create_descriptor(gdt.kernel_code, 0, 0,
                       GDT_PRESENT | GDT_DESCRIPTOR | GDT_EXECUTABLE | GDT_READWRITE,
                       GDT_FLAGS_64BIT | GDT_FLAGS_4K_GRAN);
     vga[42] = 0x0400 | '3';
 
-    create_descriptor(gdt.kernel_data, 0, 0xFFFFF, GDT_PRESENT | GDT_DESCRIPTOR | GDT_READWRITE,
-                      GDT_FLAGS_4K_GRAN);
+    create_descriptor(gdt.kernel_data, 0, 0,
+                      GDT_PRESENT | GDT_DESCRIPTOR | GDT_READWRITE, GDT_FLAGS_4K_GRAN);
     vga[43] = 0x0400 | '4';
 
-    create_descriptor(gdt.user_code, 0, 0xFFFFF,
+    create_descriptor(gdt.user_code, 0, 0,
                       GDT_PRESENT | GDT_DESCRIPTOR | GDT_USER | GDT_EXECUTABLE | GDT_READWRITE,
                       GDT_FLAGS_64BIT | GDT_FLAGS_4K_GRAN);
     vga[44] = 0x0400 | '5';
 
-    create_descriptor(gdt.user_data, 0, 0xFFFFF,
+    create_descriptor(gdt.user_data, 0, 0,
                       GDT_PRESENT | GDT_DESCRIPTOR | GDT_USER | GDT_READWRITE, GDT_FLAGS_4K_GRAN);
     vga[45] = 0x0400 | '6';
 
@@ -66,4 +72,16 @@ void init_gdt() {
     vga[47] = 0x0400 | '8';
     load_gdt(&gdtr);
     vga[48] = 0x0400 | '9';
+
+    uint32_t cr0 = read_cr0();
+    cr0 &= ~(1 << 2);
+    cr0 |= (1 << 1);
+    write_cr0(cr0);
+
+    uint32_t cr4 = read_cr4();
+    cr4 |= (1 << 9);
+    cr4 |= (1 << 10);
+    write_cr4(cr4);
+
+    vga[49] = 0x0400 | 'A';
 }

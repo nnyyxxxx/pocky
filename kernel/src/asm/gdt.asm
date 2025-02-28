@@ -1,4 +1,5 @@
 section .text
+bits 64
 global load_gdt
 
 load_gdt:
@@ -17,6 +18,9 @@ load_gdt:
     lea rcx, [rel .reload_cs]
     push rcx
     retfq
+
 .reload_cs:
     mov rsp, rax
     ret
+
+section .note.GNU-stack noalloc noexec nowrite progbits
