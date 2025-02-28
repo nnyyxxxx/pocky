@@ -38,6 +38,18 @@ bool FileSystem::initialize() {
 
     m_root = create_node("/", FileType::Directory);
     m_current_dir = m_root;
+
+    const char* welcome_content = "welcome to the kernel :)";
+    FileNode* welcome = create_file("welcome", FileType::Regular);
+    if (welcome) {
+        size_t content_size = strlen(welcome_content);
+        welcome->data = new uint8_t[content_size];
+        if (welcome->data) {
+            memcpy(welcome->data, welcome_content, content_size);
+            welcome->size = content_size;
+        }
+    }
+
     return true;
 }
 
