@@ -130,7 +130,10 @@ FileNode* FileSystem::create_file(const char* path, FileType type) {
 
     FileNode* existing = parent->first_child;
     while (existing) {
-        if (strcmp(existing->name, filename) == 0 && existing->type == type) return existing;
+        if (strcmp(existing->name, filename) == 0) {
+            if (existing->type == type) return existing;
+            return nullptr;
+        }
         existing = existing->next_sibling;
     }
 
