@@ -76,6 +76,7 @@ void cmd_help() {
     terminal_writestring("  touch    - Create an empty file\n");
     terminal_writestring("  history  - Show command history\n");
     terminal_writestring("  shutdown - Power off the system\n");
+    terminal_writestring("  TAB      - Auto-complete a dir,file, this is not a command\n");
     terminal_writestring("\n");
     command_running = false;
 }
