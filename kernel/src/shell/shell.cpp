@@ -8,6 +8,7 @@
 #include "physical_memory.hpp"
 #include "printf.hpp"
 #include "terminal.hpp"
+#include "vga.hpp"
 
 char input_buffer[256] = {0};
 size_t input_pos = 0;
@@ -402,6 +403,79 @@ void print_prompt() {
     auto& fs = fs::FileSystem::instance();
     terminal_writestring(fs.get_current_path());
     terminal_writestring(" $ ");
+}
+
+void handle_tab_completion() {
+    char* last_word = input_buffer;
+    char* space = strrchr(input_buffer, ' ');
+    if (space) last_word = space + 1;
+
+    size_t word_len = strlen(last_word);
+    if (word_len == 0) return;
+
+    char command[256] = {0};
+    if (space) {
+        size_t cmd_len = space - input_buffer;
+        strncpy(command, input_buffer, cmd_len);
+    } else
+        strcpy(command, input_buffer);
+
+    auto& fs = fs::FileSystem::instance();
+    fs::FileNode* current = fs.get_current_directory();
+    fs::FileNode* child = current->first_child;
+
+    const char* match = nullptr;
+    size_t matches = 0;
+
+    while (child) {
+        if (strncmp(child->name, last_word, word_len) == 0) {
+            if (strcmp(command, "cd") == 0 && child->type != fs::FileType::Directory) {
+                child = child->next_sibling;
+                continue;
+            }
+            match = child->name;
+            matches++;
+        }
+        child = child->next_sibling;
+    }
+
+    if (matches == 1) {
+        size_t pos = last_word - input_buffer;
+        const char* completion = match + word_len;
+        strcpy(input_buffer + pos + word_len, completion);
+        input_pos = strlen(input_buffer);
+        terminal_writestring(completion);
+    }
+}
+
+void process_keypress(char c) {
+    if (c == '\t') {
+        handle_tab_completion();
+        return;
+    }
+
+    if (c == '\n') {
+        terminal_putchar('\n');
+        process_command();
+        return;
+    }
+
+    if (c == '\b') {
+        if (input_pos > 0) {
+            input_pos--;
+            input_buffer[input_pos] = '\0';
+            terminal_column--;
+            terminal_putchar_at(' ', terminal_color, terminal_column, terminal_row);
+            update_cursor();
+        }
+        return;
+    }
+
+    if (input_pos < sizeof(input_buffer) - 1) {
+        input_buffer[input_pos++] = c;
+        input_buffer[input_pos] = '\0';
+        terminal_putchar(c);
+    }
 }
 
 void process_command() {
