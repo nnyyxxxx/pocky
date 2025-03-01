@@ -55,7 +55,9 @@ bool TextEditor::open(const char* filename) {
         return false;
 
     m_buffer_size = node->size;
-    if (!fs.read_file(filename, reinterpret_cast<uint8_t*>(m_buffer), m_buffer_size)) return false;
+    if (m_buffer_size > 0 &&
+        !fs.read_file(filename, reinterpret_cast<uint8_t*>(m_buffer), m_buffer_size))
+        return false;
     m_buffer[m_buffer_size] = '\0';
 
     m_cursor_pos = 0;
