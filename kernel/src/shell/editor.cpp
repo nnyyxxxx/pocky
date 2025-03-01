@@ -15,9 +15,12 @@ namespace editor {
 namespace {
 constexpr uint8_t STATUS_COLOR = 0x70;
 constexpr uint8_t TEXT_COLOR = 0x07;
+constexpr uint8_t LINE_NUMBER_CURRENT_COLOR = 0x0F;
+constexpr uint8_t LINE_NUMBER_COLOR = 0x08;
 constexpr size_t TERMINAL_WIDTH = 80;
 constexpr size_t TERMINAL_HEIGHT = 25;
 constexpr size_t STATUS_LINE = TERMINAL_HEIGHT - 1;
+constexpr size_t LINE_NUMBER_WIDTH = 3;
 
 constexpr uint8_t CURSOR_NORMAL_START = 0;
 constexpr uint8_t CURSOR_NORMAL_END = 15;
@@ -264,7 +267,59 @@ void TextEditor::render() {
     }
 
     current_row = 0;
-    size_t col = 0;
+    size_t col = LINE_NUMBER_WIDTH + 1;
+    size_t abs_row = m_screen_row;
+
+    for (size_t y = 0; y < visible_rows; y++) {
+        bool has_content = false;
+        size_t check_pos = line_start;
+        size_t check_row = 0;
+
+        while (check_pos < m_buffer_size && check_row < y) {
+            if (m_buffer[check_pos] == '\n') check_row++;
+            check_pos++;
+            if (check_pos >= m_buffer_size) break;
+        }
+
+        has_content = (check_pos < m_buffer_size && check_row == y) || (abs_row == m_cursor_row);
+
+        if (has_content) {
+            uint8_t color =
+                (abs_row == m_cursor_row) ? LINE_NUMBER_CURRENT_COLOR : LINE_NUMBER_COLOR;
+
+            if (abs_row < 999) {
+                size_t line_num = abs_row + 1;
+
+                size_t digits = 0;
+                size_t temp = line_num;
+                do {
+                    temp /= 10;
+                    digits++;
+                } while (temp > 0);
+
+                for (size_t i = 0; i < LINE_NUMBER_WIDTH - digits; i++) {
+                    terminal_putchar_at(' ', color, i, y);
+                }
+
+                for (size_t i = 0; i < digits; i++) {
+                    char digit = '0' + (line_num % 10);
+                    line_num /= 10;
+                    terminal_putchar_at(digit, color, LINE_NUMBER_WIDTH - i - 1, y);
+                }
+            }
+        } else {
+            for (size_t i = 0; i < LINE_NUMBER_WIDTH; i++) {
+                terminal_putchar_at(' ', TEXT_COLOR, i, y);
+            }
+        }
+
+        terminal_putchar_at(' ', TEXT_COLOR, LINE_NUMBER_WIDTH, y);
+
+        abs_row++;
+    }
+
+    current_row = 0;
+    col = LINE_NUMBER_WIDTH + 1;
 
     for (size_t i = line_start; i < m_buffer_size && current_row < visible_rows; i++) {
         if (m_buffer[i] == '\n') {
@@ -273,12 +328,12 @@ void TextEditor::render() {
                 col++;
             }
             current_row++;
-            col = 0;
+            col = LINE_NUMBER_WIDTH + 1;
         } else {
             terminal_putchar_at(m_buffer[i], TEXT_COLOR, col, current_row);
             col++;
             if (col >= TERMINAL_WIDTH) {
-                col = 0;
+                col = LINE_NUMBER_WIDTH + 1;
                 current_row++;
             }
         }
@@ -291,7 +346,7 @@ void TextEditor::render() {
             terminal_putchar_at(' ', TEXT_COLOR, col, current_row);
             col++;
         }
-        col = 0;
+        col = LINE_NUMBER_WIDTH + 1;
         current_row++;
     }
 
@@ -480,7 +535,7 @@ void TextEditor::display_status_line() {
 
 void TextEditor::update_cursor() {
     size_t screen_y = m_cursor_row - m_screen_row;
-    size_t screen_x = m_cursor_col;
+    size_t screen_x = m_cursor_col + LINE_NUMBER_WIDTH + 1;
 
     if (screen_y >= TERMINAL_HEIGHT - 1) screen_y = TERMINAL_HEIGHT - 2;
 
