@@ -368,9 +368,8 @@ void TextEditor::move_cursor_left() {
             }
 
             m_cursor_col = m_cursor_pos - line_start;
-        } else {
+        } else
             m_cursor_col--;
-        }
 
         update_screen_position();
     }
