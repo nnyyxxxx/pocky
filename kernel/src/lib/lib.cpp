@@ -129,6 +129,17 @@ extern "C" int snprintf(char* str, size_t size, const char* format, ...) {
     return strlen(str);
 }
 
+extern "C" char* strcat(char* dest, const char* src) {
+    char* d = dest;
+    while (*d) {
+        d++;
+    }
+    while ((*d++ = *src++)) {
+        ;
+    }
+    return dest;
+}
+
 void* operator new(size_t size) {
     return HeapAllocator::instance().allocate(size);
 }

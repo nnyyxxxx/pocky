@@ -24,6 +24,15 @@ void update_cursor() {
     outb(VGA_DATA_PORT, static_cast<uint8_t>(pos & 0xFF));
 }
 
+void update_cursor_position(size_t x, size_t y) {
+    uint16_t pos = static_cast<uint16_t>(y) * VGA_WIDTH + static_cast<uint16_t>(x);
+
+    outb(VGA_CTRL_PORT, 14);
+    outb(VGA_DATA_PORT, static_cast<uint8_t>(pos >> 8));
+    outb(VGA_CTRL_PORT, 15);
+    outb(VGA_DATA_PORT, static_cast<uint8_t>(pos & 0xFF));
+}
+
 void cursor_initialize() {
     outb(VGA_CTRL_PORT, 0x0A);
     outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xC0) | 14);

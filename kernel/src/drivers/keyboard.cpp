@@ -55,9 +55,18 @@ char keyboard_read() {
         return 0;
     }
 
-    if (ctrl_pressed && scancode == SCAN_C) return 3;
-
     if (scancode < 128) {
+        if (ctrl_pressed) {
+            char key = keyboard_map[scancode];
+            if (key >= 'a' && key <= 'z')
+                return key - 'a' + 1;
+            else if (key >= 'A' && key <= 'Z')
+                return key - 'A' + 1;
+            else if (scancode == SCAN_C)
+                return 3;
+            return 0;
+        }
+
         if (shift_pressed)
             return keyboard_shift_map[scancode];
         else

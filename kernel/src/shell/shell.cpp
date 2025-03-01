@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include "editor.hpp"
 #include "fs/filesystem.hpp"
 #include "io.hpp"
 #include "physical_memory.hpp"
@@ -75,6 +76,7 @@ void cmd_help() {
     terminal_writestring("  mv       - Move/rename a file\n");
     terminal_writestring("  rm       - Remove a file or directory\n");
     terminal_writestring("  touch    - Create an empty file\n");
+    terminal_writestring("  edit     - Edit a file\n");
     terminal_writestring("  history  - Show command history\n");
     terminal_writestring("  uptime   - Show system uptime\n");
     terminal_writestring("  shutdown - Power off the system\n");
@@ -338,6 +340,12 @@ void cmd_touch(const char* path) {
     }
 }
 
+void cmd_edit(const char* path) {
+    command_running = true;
+    editor::cmd_edit(path);
+    command_running = false;
+}
+
 void cmd_history() {
     command_running = true;
 
@@ -465,6 +473,13 @@ void handle_tab_completion() {
 }
 
 void process_keypress(char c) {
+    auto& editor = editor::TextEditor::instance();
+
+    if (editor.is_active()) {
+        editor.process_keypress(c);
+        return;
+    }
+
     if (c == '\t') {
         handle_tab_completion();
         return;
@@ -552,7 +567,20 @@ void process_command() {
         cmd_rm(args);
     else if (strcmp(input_buffer, "touch") == 0)
         cmd_touch(args);
-    else if (strcmp(input_buffer, "history") == 0)
+    else if (strcmp(input_buffer, "edit") == 0) {
+        char filename[256];
+        if (args)
+            strcpy(filename, args);
+        else
+            filename[0] = '\0';
+
+        memset(input_buffer, 0, sizeof(input_buffer));
+        input_pos = 0;
+
+        cmd_edit(filename);
+
+        return;
+    } else if (strcmp(input_buffer, "history") == 0)
         cmd_history();
     else if (strcmp(input_buffer, "uptime") == 0)
         cmd_uptime();
@@ -580,4 +608,5 @@ void init_shell() {
     command_running = false;
     terminal_writestring("\n");
     print_prompt();
+    editor::init_editor();
 }

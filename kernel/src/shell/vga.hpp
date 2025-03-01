@@ -20,4 +20,5 @@ extern volatile uint16_t* const VGA_MEMORY;
 uint8_t vga_color(uint8_t fg, uint8_t bg);
 uint16_t vga_entry(char c, uint8_t color);
 void update_cursor();
+void update_cursor_position(size_t x, size_t y);
 void cursor_initialize();

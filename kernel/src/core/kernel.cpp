@@ -1,3 +1,4 @@
+#include "editor.hpp"
 #include "elf.hpp"
 #include "fs/filesystem.hpp"
 #include "gdt.hpp"

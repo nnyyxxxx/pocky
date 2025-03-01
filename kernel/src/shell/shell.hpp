@@ -12,6 +12,7 @@ extern size_t history_count;
 
 void process_keypress(char c);
 void process_command();
+void print_prompt();
 void cmd_help();
 void cmd_echo(const char* args);
 void cmd_crash();
@@ -27,6 +28,7 @@ void cmd_rm(const char* path);
 void cmd_touch(const char* path);
 void cmd_history();
 void cmd_uptime();
+void cmd_edit(const char* path);
 void init_shell();
 void interrupt_command();
 void handle_tab_completion();
