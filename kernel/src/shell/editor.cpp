@@ -47,7 +47,9 @@ bool TextEditor::open(const char* filename) {
         fs.create_file(filename, fs::FileType::Regular);
         m_buffer_size = 0;
         m_buffer[0] = '\0';
-    } else if (node->type != fs::FileType::Regular)
+    } else if (node->type == fs::FileType::Directory)
+        return false;
+    else if (node->type != fs::FileType::Regular)
         return false;
     else if (node->size >= MAX_BUFFER_SIZE)
         return false;
@@ -492,6 +494,16 @@ void init_editor() {
 void cmd_edit(const char* filename) {
     if (!filename || !*filename) {
         terminal_writestring("Usage: edit <filename>\n");
+        return;
+    }
+
+    auto& fs = fs::FileSystem::instance();
+    auto node = fs.get_file(filename);
+    if (node && node->type == fs::FileType::Directory) {
+        terminal_writestring("Cannot edit directory: ");
+        terminal_writestring(filename);
+        terminal_writestring("\n");
+        print_prompt();
         return;
     }
 
