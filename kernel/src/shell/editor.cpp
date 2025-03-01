@@ -19,6 +19,11 @@ constexpr size_t TERMINAL_WIDTH = 80;
 constexpr size_t TERMINAL_HEIGHT = 25;
 constexpr size_t STATUS_LINE = TERMINAL_HEIGHT - 1;
 
+constexpr uint8_t CURSOR_NORMAL_START = 0;
+constexpr uint8_t CURSOR_NORMAL_END = 15;
+constexpr uint8_t CURSOR_INSERT_START = 14;
+constexpr uint8_t CURSOR_INSERT_END = 15;
+
 inline bool is_ctrl_key(char c, char key) {
     return (c == (key & 0x1f));
 }
@@ -59,8 +64,14 @@ bool TextEditor::open(const char* filename) {
     m_screen_offset = 0;
     m_active = true;
     m_modified = false;
+    m_mode = EditorMode::NORMAL;
 
     terminal_clear();
+
+    outb(VGA_CTRL_PORT, 0x0A);
+    outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xC0) | CURSOR_NORMAL_START);
+    outb(VGA_CTRL_PORT, 0x0B);
+    outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xE0) | CURSOR_NORMAL_END);
 
     render();
 
@@ -95,6 +106,8 @@ void TextEditor::close() {
 
     terminal_row = 0;
     terminal_column = 0;
+
+    cursor_initialize();
     update_cursor();
 
     m_buffer_size = 0;
@@ -124,7 +137,68 @@ void TextEditor::process_keypress(char c) {
         return;
     }
 
+    if (m_mode == EditorMode::NORMAL)
+        process_normal_mode(c);
+    else
+        process_insert_mode(c);
+
+    render();
+}
+
+void TextEditor::process_normal_mode(char c) {
     switch (c) {
+        case 'h':
+            move_cursor_left();
+            break;
+        case 'j':
+            move_cursor_down();
+            break;
+        case 'k':
+            move_cursor_up();
+            break;
+        case 'l':
+            move_cursor_right();
+            break;
+        case 'i':
+            switch_to_insert_mode();
+            break;
+        case 'a':
+            if (m_cursor_pos < m_buffer_size) move_cursor_right();
+            switch_to_insert_mode();
+            break;
+        case 'x':
+            delete_char();
+            break;
+        case 'd':
+            size_t line_start = m_cursor_pos;
+            while (line_start > 0 && m_buffer[line_start - 1] != '\n') {
+                line_start--;
+            }
+
+            size_t line_end = m_cursor_pos;
+            while (line_end < m_buffer_size && m_buffer[line_end] != '\n') {
+                line_end++;
+            }
+            if (line_end < m_buffer_size) line_end++;
+
+            size_t line_length = line_end - line_start;
+            if (line_length > 0) {
+                memmove(&m_buffer[line_start], &m_buffer[line_end], m_buffer_size - line_end + 1);
+                m_buffer_size -= line_length;
+                m_cursor_pos = line_start;
+                m_cursor_col = 0;
+                m_modified = true;
+                update_screen_position();
+            }
+            break;
+    }
+}
+
+void TextEditor::process_insert_mode(char c) {
+    switch (c) {
+        case 27:
+            switch_to_normal_mode();
+            break;
         case '\n':
             insert_char('\n');
             break;
@@ -134,14 +208,32 @@ void TextEditor::process_keypress(char c) {
         case 127:
             delete_char();
             break;
-        case 27:
-            break;
         default:
             if (c >= 32 && c < 127) insert_char(c);
             break;
     }
+}
 
-    render();
+void TextEditor::switch_to_normal_mode() {
+    m_mode = EditorMode::NORMAL;
+
+    outb(VGA_CTRL_PORT, 0x0A);
+    outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xC0) | CURSOR_NORMAL_START);
+    outb(VGA_CTRL_PORT, 0x0B);
+    outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xE0) | CURSOR_NORMAL_END);
+
+    display_status_line();
+}
+
+void TextEditor::switch_to_insert_mode() {
+    m_mode = EditorMode::INSERT;
+
+    outb(VGA_CTRL_PORT, 0x0A);
+    outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xC0) | CURSOR_INSERT_START);
+    outb(VGA_CTRL_PORT, 0x0B);
+    outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xE0) | CURSOR_INSERT_END);
+
+    display_status_line();
 }
 
 void TextEditor::render() {
@@ -344,10 +436,18 @@ void TextEditor::display_status_line() {
     char modified_indicator[12] = {0};
     if (m_modified) strcpy(modified_indicator, "[modified]");
 
+    char mode_indicator[12] = {0};
+    if (m_mode == EditorMode::NORMAL)
+        strcpy(mode_indicator, "[NORMAL]");
+    else
+        strcpy(mode_indicator, "[INSERT]");
+
     strcpy(status, " ");
     strcat(status, m_filename);
     strcat(status, " ");
     strcat(status, modified_indicator);
+    strcat(status, " ");
+    strcat(status, mode_indicator);
     strcat(status, " | lines: ");
 
     char row_str[16] = {0};

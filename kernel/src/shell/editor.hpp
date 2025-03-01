@@ -7,6 +7,11 @@ namespace editor {
 constexpr size_t MAX_BUFFER_SIZE = 16384;
 constexpr size_t MAX_FILENAME_LENGTH = 256;
 
+enum class EditorMode {
+    NORMAL,
+    INSERT
+};
+
 class TextEditor {
 public:
     static TextEditor& instance();
@@ -17,6 +22,7 @@ public:
     void process_keypress(char c);
     void render();
     bool is_active() const { return m_active; }
+    EditorMode get_mode() const { return m_mode; }
 
 private:
     TextEditor() = default;
@@ -35,6 +41,11 @@ private:
     void display_status_line();
     void update_cursor();
 
+    void process_normal_mode(char c);
+    void process_insert_mode(char c);
+    void switch_to_normal_mode();
+    void switch_to_insert_mode();
+
     char m_buffer[MAX_BUFFER_SIZE] = {0};
     char m_filename[MAX_FILENAME_LENGTH] = {0};
     size_t m_buffer_size = 0;
@@ -46,6 +57,7 @@ private:
     size_t m_screen_offset = 0;
     bool m_active = false;
     bool m_modified = false;
+    EditorMode m_mode = EditorMode::NORMAL;
 };
 
 void init_editor();
