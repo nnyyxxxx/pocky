@@ -1,17 +1,22 @@
 ENTRY(_start)
 
 SECTIONS {
-    . = 0x100000;
+    . = 1M;
 
-    .text : {
-        *(.text)
+    .multiboot_header ALIGN(8) : {
+        *(.multiboot_header)
     }
 
-    .rodata : {
-        *(.rodata)
+    .text ALIGN(4K) : {
+        *(.text.boot)
+        *(.text .text.*)
     }
 
-    .init_array : {
+    .rodata ALIGN(4K) : {
+        *(.rodata .rodata.*)
+    }
+
+    .init_array ALIGN(4K) : {
         PROVIDE_HIDDEN(__init_array_start = .);
         KEEP(*(SORT_BY_INIT_PRIORITY(.init_array.*)))
         KEEP(*(.init_array))
@@ -25,11 +30,12 @@ SECTIONS {
         PROVIDE_HIDDEN(__fini_array_end = .);
     }
 
-    .data : {
-        *(.data)
+    .data ALIGN(4K) : {
+        *(.data .data.*)
     }
 
-    .bss : {
-        *(.bss)
+    .bss ALIGN(4K) : {
+        *(COMMON)
+        *(.bss .bss.*)
     }
 }

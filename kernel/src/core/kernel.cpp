@@ -6,6 +6,7 @@
 #include "idt.hpp"
 #include "io.hpp"
 #include "keyboard.hpp"
+#include "multiboot2.hpp"
 #include "physical_memory.hpp"
 #include "pic.hpp"
 #include "shell.hpp"
@@ -48,7 +49,12 @@ extern "C" void kernel_main() {
     constexpr size_t HEAP_SIZE = 16 * 1024 * 1024;
 
     auto& pmm = PhysicalMemoryManager::instance();
-    pmm.initialize(MEMORY_START, MEMORY_SIZE);
+
+    const auto* mb_memory_map = kernel::get_memory_map();
+    if (mb_memory_map)
+        pmm.initialize(MEMORY_START, MEMORY_SIZE);
+    else
+        pmm.initialize(MEMORY_START, MEMORY_SIZE);
 
     const char* msg5 = "[5] PMM Init Done";
     for (int i = 0; msg5[i] != '\0'; i++) {
