@@ -5,6 +5,7 @@
 
 #include "editor.hpp"
 #include "fs/filesystem.hpp"
+#include "graphics.hpp"
 #include "io.hpp"
 #include "physical_memory.hpp"
 #include "printf.hpp"
@@ -80,6 +81,7 @@ void cmd_help() {
     terminal_writestring("  history  - Show command history\n");
     terminal_writestring("  uptime   - Show system uptime\n");
     terminal_writestring("  shutdown - Power off the system\n");
+    terminal_writestring("  graphics - Enter graphics mode\n");
     terminal_writestring("  TAB      - Auto-complete a dir,file, this is not a command\n");
     terminal_writestring("\n");
     command_running = false;
@@ -586,7 +588,12 @@ void process_command() {
         cmd_uptime();
     else if (strcmp(input_buffer, "shutdown") == 0 || strcmp(input_buffer, "poweroff") == 0)
         cmd_shutdown();
-    else if (input_buffer[0] != '\0') {
+    else if (strcmp(input_buffer, "graphics") == 0) {
+        terminal_writestring("Entering graphics mode. Press ESC to exit.\n");
+        for (volatile int i = 0; i < 1000000; i++)
+            ;
+        enter_graphics_mode();
+    } else if (input_buffer[0] != '\0') {
         terminal_writestring("Unknown command: ");
         terminal_writestring(input_buffer);
         terminal_writestring("\n");

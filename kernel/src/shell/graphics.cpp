@@ -1,0 +1,43 @@
+#include "graphics.hpp"
+
+#include <cstring>
+
+#include "io.hpp"
+#include "keyboard.hpp"
+#include "terminal.hpp"
+#include "vga.hpp"
+
+bool in_graphics_mode = false;
+
+constexpr uint8_t SCAN_ESC = 0x01;
+
+void graphics_initialize() {
+    // no-op
+}
+
+void enter_graphics_mode() {
+    in_graphics_mode = true;
+
+    for (uint16_t y = 0; y < VGA_HEIGHT; y++) {
+        for (uint16_t x = 0; x < VGA_WIDTH; x++) {
+            const uint16_t index = y * VGA_WIDTH + x;
+            VGA_MEMORY[index] = vga_entry(' ', vga_color(VGA_COLOR_BLACK, VGA_COLOR_BLACK));
+        }
+    }
+
+    outb(VGA_CTRL_PORT, 0x0A);
+    outb(VGA_DATA_PORT, 0x20);
+
+    while (in_graphics_mode) {
+        asm volatile("hlt");
+    }
+}
+
+void exit_graphics_mode() {
+    in_graphics_mode = false;
+
+    cursor_initialize();
+
+    terminal_initialize();
+    terminal_writestring("Exited graphics mode\n");
+}

@@ -2,6 +2,7 @@
 #include "elf.hpp"
 #include "fs/filesystem.hpp"
 #include "gdt.hpp"
+#include "graphics.hpp"
 #include "heap.hpp"
 #include "idt.hpp"
 #include "io.hpp"
@@ -116,6 +117,8 @@ extern "C" void kernel_main() {
     terminal_initialize();
     terminal_writestring("Welcome to the Kernel!\n");
     terminal_writestring("Type 'help' to see the list of available commands.\n");
+
+    graphics_initialize();
 
     init_shell();
 
