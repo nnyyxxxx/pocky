@@ -7,6 +7,7 @@
 #include "idt.hpp"
 #include "io.hpp"
 #include "keyboard.hpp"
+#include "mouse.hpp"
 #include "multiboot2.hpp"
 #include "physical_memory.hpp"
 #include "pic.hpp"
@@ -94,11 +95,18 @@ extern "C" void kernel_main() {
         vga[i + 640] = 0x0F00 | msg9[i];
     }
 
-    init_timer(100);
+    init_mouse();
 
-    const char* msg10 = "[10] Timer Init Done";
+    const char* msg10 = "[10] Mouse Init Done";
     for (int i = 0; msg10[i] != '\0'; i++) {
         vga[i + 720] = 0x0F00 | msg10[i];
+    }
+
+    init_timer(100);
+
+    const char* msg11 = "[11] Timer Init Done";
+    for (int i = 0; msg11[i] != '\0'; i++) {
+        vga[i + 800] = 0x0F00 | msg11[i];
     }
 
     auto& heap = HeapAllocator::instance();
@@ -107,9 +115,9 @@ extern "C" void kernel_main() {
     auto& fs = fs::FileSystem::instance();
     fs.initialize();
 
-    const char* msg11 = "[11] Filesystem Init Done";
-    for (int i = 0; msg11[i] != '\0'; i++) {
-        vga[i + 800] = 0x0F00 | msg11[i];
+    const char* msg12 = "[12] Filesystem Init Done";
+    for (int i = 0; msg12[i] != '\0'; i++) {
+        vga[i + 880] = 0x0F00 | msg12[i];
     }
 
     kernel::DynamicLinker::initialize();

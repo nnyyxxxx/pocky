@@ -374,6 +374,14 @@ void cmd_uptime() {
     command_running = false;
 }
 
+void cmd_graphics() {
+    command_running = true;
+    for (volatile int i = 0; i < 1000000; i++)
+        ;
+    enter_graphics_mode();
+    command_running = false;
+}
+
 void interrupt_command() {
     if (command_running) {
         terminal_writestring("\nCommand interrupted\n");
@@ -588,12 +596,9 @@ void process_command() {
         cmd_uptime();
     else if (strcmp(input_buffer, "shutdown") == 0 || strcmp(input_buffer, "poweroff") == 0)
         cmd_shutdown();
-    else if (strcmp(input_buffer, "graphics") == 0) {
-        terminal_writestring("Entering graphics mode. Press ESC to exit.\n");
-        for (volatile int i = 0; i < 1000000; i++)
-            ;
-        enter_graphics_mode();
-    } else if (input_buffer[0] != '\0') {
+    else if (strcmp(input_buffer, "graphics") == 0)
+        cmd_graphics();
+    else if (input_buffer[0] != '\0') {
         terminal_writestring("Unknown command: ");
         terminal_writestring(input_buffer);
         terminal_writestring("\n");

@@ -29,6 +29,7 @@ void cmd_touch(const char* path);
 void cmd_history();
 void cmd_uptime();
 void cmd_edit(const char* path);
+void cmd_graphics();
 void init_shell();
 void interrupt_command();
 void handle_tab_completion();
