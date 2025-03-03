@@ -13,30 +13,34 @@ uint8_t mouse_packet[3];
 
 MouseState current_mouse_state;
 
-void mouse_wait_for_output() {
+void mouse_wait_output() {
     uint32_t timeout = 100000;
     while (timeout--) {
-        if ((inb(MOUSE_COMMAND_PORT) & 0x01) != 0) return;
+        if (inb(MOUSE_COMMAND_PORT) & 0x01) return;
     }
 }
 
-void mouse_wait_for_input() {
+void mouse_wait_input() {
     uint32_t timeout = 100000;
     while (timeout--) {
         if ((inb(MOUSE_COMMAND_PORT) & 0x02) == 0) return;
     }
 }
 
-void mouse_write(uint8_t value) {
-    mouse_wait_for_input();
-    outb(MOUSE_COMMAND_PORT, 0xD4);
-    mouse_wait_for_input();
-    outb(MOUSE_DATA_PORT, value);
+uint8_t mouse_read() {
+    mouse_wait_output();
+    return inb(MOUSE_DATA_PORT);
 }
 
-uint8_t mouse_read() {
-    mouse_wait_for_output();
-    return inb(MOUSE_DATA_PORT);
+void mouse_write(uint8_t cmd) {
+    mouse_wait_input();
+    outb(MOUSE_COMMAND_PORT, 0xD4);
+
+    mouse_wait_input();
+    outb(MOUSE_DATA_PORT, cmd);
+
+    uint8_t ack = mouse_read();
+    if (ack != 0xFA) terminal_writestring("Mouse command failed: ");
 }
 
 }  // namespace
@@ -44,44 +48,46 @@ uint8_t mouse_read() {
 void process_mouse_packet(uint8_t packet[3]) {
     if (!mouse_initialized) return;
 
-    bool x_overflow = packet[0] & MOUSE_X_OVERFLOW;
-    bool y_overflow = packet[0] & MOUSE_Y_OVERFLOW;
+    if (!(packet[0] & 0x08)) return;
 
-    if (!x_overflow && !y_overflow) {
-        int8_t x_movement = packet[1];
-        int8_t y_movement = packet[2];
+    bool left = packet[0] & MOUSE_LEFT_BUTTON;
+    bool right = packet[0] & MOUSE_RIGHT_BUTTON;
+    bool middle = packet[0] & MOUSE_MIDDLE_BUTTON;
 
-        if (packet[0] & MOUSE_X_SIGN) x_movement |= 0xFFFFFF00;
-        if (packet[0] & MOUSE_Y_SIGN) y_movement |= 0xFFFFFF00;
+    int8_t x_mov = (int8_t)packet[1];
+    int8_t y_mov = (int8_t)packet[2];
 
-        y_movement = -y_movement;
+    y_mov = -y_mov;
 
-        current_mouse_state.x += x_movement * 2;
-        current_mouse_state.y += y_movement * 2;
+    const int SENSITIVITY = 4;
+    current_mouse_state.x += x_mov * SENSITIVITY;
+    current_mouse_state.y += y_mov * SENSITIVITY;
 
-        if (current_mouse_state.x < 0) current_mouse_state.x = 0;
-        if (current_mouse_state.y < 0) current_mouse_state.y = 0;
-        if (current_mouse_state.x >= GRAPHICS_WIDTH) current_mouse_state.x = GRAPHICS_WIDTH - 1;
-        if (current_mouse_state.y >= GRAPHICS_HEIGHT) current_mouse_state.y = GRAPHICS_HEIGHT - 1;
-    }
+    if (current_mouse_state.x < 0) current_mouse_state.x = 0;
+    if (current_mouse_state.y < 0) current_mouse_state.y = 0;
+    if (current_mouse_state.x >= GRAPHICS_WIDTH) current_mouse_state.x = GRAPHICS_WIDTH - 1;
+    if (current_mouse_state.y >= GRAPHICS_HEIGHT) current_mouse_state.y = GRAPHICS_HEIGHT - 1;
 
-    current_mouse_state.left_button = (packet[0] & MOUSE_LEFT_BUTTON) != 0;
-    current_mouse_state.right_button = (packet[0] & MOUSE_RIGHT_BUTTON) != 0;
-    current_mouse_state.middle_button = (packet[0] & MOUSE_MIDDLE_BUTTON) != 0;
+    current_mouse_state.left_button = left;
+    current_mouse_state.right_button = right;
+    current_mouse_state.middle_button = middle;
 }
 
 extern "C" void mouse_callback() {
     uint8_t status = inb(MOUSE_COMMAND_PORT);
 
-    if (!(status & 0x01)) return;
-    if (!(status & 0x20)) return;
+    if (!(status & 0x20) || !(status & 0x01)) {
+        outb(PIC2_COMMAND, 0x20);
+        outb(PIC1_COMMAND, 0x20);
+        return;
+    }
 
     uint8_t data = inb(MOUSE_DATA_PORT);
 
     switch (mouse_cycle) {
         case 0:
-            mouse_packet[0] = data;
-            if ((data & 0x08) == 0x08) {
+            if (data & 0x08) {
+                mouse_packet[0] = data;
                 mouse_cycle = 1;
             }
             break;
@@ -97,39 +103,37 @@ extern "C" void mouse_callback() {
             mouse_cycle = 0;
             break;
     }
+
+    outb(PIC2_COMMAND, 0x20);
+    outb(PIC1_COMMAND, 0x20);
 }
 
 void init_mouse() {
-    uint8_t status;
-
-    mouse_wait_for_input();
+    mouse_wait_input();
     outb(MOUSE_COMMAND_PORT, 0xA8);
 
-    mouse_wait_for_input();
+    mouse_wait_input();
     outb(MOUSE_COMMAND_PORT, 0x20);
-    mouse_wait_for_output();
-    status = inb(MOUSE_DATA_PORT) | 2;
-    mouse_wait_for_input();
+    mouse_wait_output();
+    uint8_t status = inb(MOUSE_DATA_PORT);
+    status |= 0x02;
+    mouse_wait_input();
     outb(MOUSE_COMMAND_PORT, 0x60);
-    mouse_wait_for_input();
+    mouse_wait_input();
     outb(MOUSE_DATA_PORT, status);
 
-    mouse_write(MOUSE_CMD_SET_DEFAULTS);
-    if (mouse_read() != 0xFA) return;
+    mouse_write(MOUSE_CMD_RESET);
+    mouse_read();
 
-    mouse_write(MOUSE_CMD_ENABLE_STREAMING);
-    if (mouse_read() != 0xFA) return;
+    mouse_write(MOUSE_CMD_SET_DEFAULTS);
 
     mouse_write(MOUSE_CMD_SET_SAMPLE_RATE);
-    if (mouse_read() != 0xFA) return;
-    mouse_write(100);
-    if (mouse_read() != 0xFA) return;
+    mouse_write(200);
 
-    set_interrupt_handler(32 + MOUSE_IRQ, mouse_handler,
-                          IDT_PRESENT | IDT_DPL0 | IDT_INTERRUPT_GATE);
+    mouse_write(MOUSE_CMD_SET_RESOLUTION);
+    mouse_write(3);
 
-    outb(PIC1_DATA, inb(PIC1_DATA) & ~(1 << 2));
-    outb(PIC2_DATA, inb(PIC2_DATA) & ~(1 << 4));
+    mouse_write(MOUSE_CMD_ENABLE_STREAMING);
 
     current_mouse_state.x = GRAPHICS_WIDTH / 2;
     current_mouse_state.y = GRAPHICS_HEIGHT / 2;
@@ -138,6 +142,13 @@ void init_mouse() {
     current_mouse_state.middle_button = false;
 
     mouse_cycle = 0;
+
+    set_interrupt_handler(32 + MOUSE_IRQ, mouse_handler,
+                          IDT_PRESENT | IDT_DPL0 | IDT_INTERRUPT_GATE);
+
+    outb(PIC1_DATA, inb(PIC1_DATA) & ~(1 << 2));
+    outb(PIC2_DATA, inb(PIC2_DATA) & ~(1 << 4));
+
     mouse_initialized = true;
 }
 

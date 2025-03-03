@@ -378,6 +378,7 @@ void cmd_graphics() {
     command_running = true;
     for (volatile int i = 0; i < 1000000; i++)
         ;
+
     enter_graphics_mode();
     command_running = false;
 }
