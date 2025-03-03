@@ -78,14 +78,15 @@ void process_mouse_packet(uint8_t packet[3]) {
 extern "C" void mouse_callback() {
     uint8_t status = inb(MOUSE_COMMAND_PORT);
 
-    if (!(status & 0x01) || !(status & 0x20)) return;
+    if (!(status & 0x01)) return;
+    if (!(status & 0x20)) return;
 
     uint8_t data = inb(MOUSE_DATA_PORT);
 
     switch (mouse_cycle) {
         case 0:
+            mouse_packet[0] = data;
             if ((data & 0x08) == 0x08) {
-                mouse_packet[0] = data;
                 mouse_cycle = 1;
             }
             break;
@@ -130,8 +131,8 @@ void init_mouse() {
     outb(PIC1_DATA, inb(PIC1_DATA) & ~(1 << 2));
     outb(PIC2_DATA, inb(PIC2_DATA) & ~(1 << 4));
 
-    current_mouse_state.x = 0;
-    current_mouse_state.y = 0;
+    current_mouse_state.x = 320;
+    current_mouse_state.y = 240;
     current_mouse_state.left_button = false;
     current_mouse_state.right_button = false;
     current_mouse_state.middle_button = false;
