@@ -29,7 +29,17 @@ void enter_graphics_mode() {
     outb(VGA_DATA_PORT, 0x20);
 
     while (in_graphics_mode) {
-        asm volatile("hlt");
+        if (inb(KEYBOARD_STATUS_PORT) & 1) {
+            uint8_t scancode = inb(KEYBOARD_DATA_PORT);
+
+            if (scancode == SCAN_ESC) {
+                exit_graphics_mode();
+                break;
+            }
+        }
+
+        for (volatile int i = 0; i < 10000; i++)
+            ;
     }
 }
 
@@ -39,5 +49,4 @@ void exit_graphics_mode() {
     cursor_initialize();
 
     terminal_initialize();
-    terminal_writestring("Exited graphics mode\n");
 }
