@@ -1,23 +1,22 @@
 #include "mouse.hpp"
 
-#include <cstring>
-
+#include "graphics.hpp"
 #include "idt.hpp"
 #include "io.hpp"
 #include "pic.hpp"
 #include "terminal.hpp"
 
 namespace {
+bool mouse_initialized = false;
+uint8_t mouse_cycle = 0;
+uint8_t mouse_packet[3];
 
 MouseState current_mouse_state;
-uint8_t mouse_cycle = 0;
-uint8_t mouse_packet[3] = {0};
-bool mouse_initialized = false;
 
 void mouse_wait_for_output() {
     uint32_t timeout = 100000;
     while (timeout--) {
-        if ((inb(MOUSE_COMMAND_PORT) & 0x01) == 0x01) return;
+        if ((inb(MOUSE_COMMAND_PORT) & 0x01) != 0) return;
     }
 }
 
@@ -53,21 +52,17 @@ void process_mouse_packet(uint8_t packet[3]) {
         int8_t y_movement = packet[2];
 
         if (packet[0] & MOUSE_X_SIGN) x_movement |= 0xFFFFFF00;
-
         if (packet[0] & MOUSE_Y_SIGN) y_movement |= 0xFFFFFF00;
 
         y_movement = -y_movement;
 
-        current_mouse_state.x += x_movement;
-        current_mouse_state.y += y_movement;
-
-        constexpr int32_t SCREEN_WIDTH = 640;
-        constexpr int32_t SCREEN_HEIGHT = 480;
+        current_mouse_state.x += x_movement * 2;
+        current_mouse_state.y += y_movement * 2;
 
         if (current_mouse_state.x < 0) current_mouse_state.x = 0;
         if (current_mouse_state.y < 0) current_mouse_state.y = 0;
-        if (current_mouse_state.x >= SCREEN_WIDTH) current_mouse_state.x = SCREEN_WIDTH - 1;
-        if (current_mouse_state.y >= SCREEN_HEIGHT) current_mouse_state.y = SCREEN_HEIGHT - 1;
+        if (current_mouse_state.x >= GRAPHICS_WIDTH) current_mouse_state.x = GRAPHICS_WIDTH - 1;
+        if (current_mouse_state.y >= GRAPHICS_HEIGHT) current_mouse_state.y = GRAPHICS_HEIGHT - 1;
     }
 
     current_mouse_state.left_button = (packet[0] & MOUSE_LEFT_BUTTON) != 0;
@@ -125,14 +120,19 @@ void init_mouse() {
     mouse_write(MOUSE_CMD_ENABLE_STREAMING);
     if (mouse_read() != 0xFA) return;
 
+    mouse_write(MOUSE_CMD_SET_SAMPLE_RATE);
+    if (mouse_read() != 0xFA) return;
+    mouse_write(100);
+    if (mouse_read() != 0xFA) return;
+
     set_interrupt_handler(32 + MOUSE_IRQ, mouse_handler,
                           IDT_PRESENT | IDT_DPL0 | IDT_INTERRUPT_GATE);
 
     outb(PIC1_DATA, inb(PIC1_DATA) & ~(1 << 2));
     outb(PIC2_DATA, inb(PIC2_DATA) & ~(1 << 4));
 
-    current_mouse_state.x = 320;
-    current_mouse_state.y = 240;
+    current_mouse_state.x = GRAPHICS_WIDTH / 2;
+    current_mouse_state.y = GRAPHICS_HEIGHT / 2;
     current_mouse_state.left_button = false;
     current_mouse_state.right_button = false;
     current_mouse_state.middle_button = false;
