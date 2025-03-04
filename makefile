@@ -21,7 +21,7 @@ KERNEL_CPP_SRCS = $(KERNEL_SRC)/core/kernel.cpp $(KERNEL_SRC)/lib/lib.cpp $(KERN
 
 KERNEL_ASM_SRCS = $(KERNEL_SRC)/asm/entry.asm $(KERNEL_SRC)/asm/gdt.asm $(KERNEL_SRC)/asm/idt.asm \
                   $(KERNEL_SRC)/asm/isr.asm $(KERNEL_SRC)/asm/vm.asm $(KERNEL_SRC)/asm/timer.asm \
-                  $(KERNEL_SRC)/asm/mouse.asm
+                  $(KERNEL_SRC)/asm/mouse.asm $(KERNEL_SRC)/asm/context.asm
 
 KERNEL_CPP_OBJS = $(patsubst $(KERNEL_SRC)/%.cpp,$(BUILD_DIR)/%.o,$(KERNEL_CPP_SRCS))
 KERNEL_ASM_OBJS = $(patsubst $(KERNEL_SRC)/asm/%.asm,$(BUILD_DIR)/asm/%_asm.o,$(KERNEL_ASM_SRCS))

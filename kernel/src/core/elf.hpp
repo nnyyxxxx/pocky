@@ -24,6 +24,14 @@ constexpr uint64_t DT_STRTAB = 5;
 constexpr uint64_t DT_SYMTAB = 6;
 constexpr uint64_t R_X86_64_JUMP_SLOT = 7;
 
+constexpr uint32_t PF_X = 0x1;
+constexpr uint32_t PF_W = 0x2;
+constexpr uint32_t PF_R = 0x4;
+
+constexpr uint64_t SHF_WRITE = 0x1;
+constexpr uint64_t SHF_ALLOC = 0x2;
+constexpr uint64_t SHF_EXECINSTR = 0x4;
+
 struct Elf64_Ehdr {
     unsigned char e_ident[16];
     uint16_t e_type;
@@ -91,12 +99,12 @@ struct Elf64_Dyn {
 
 class ElfLoader {
 public:
-    static bool load_elf(const char* path, uint64_t& entry_point);
-
-private:
     static bool validate_elf_header(const Elf64_Ehdr* header);
     static bool load_program_headers(const Elf64_Ehdr* header, const char* base);
     static bool map_segment(const Elf64_Phdr* phdr, const char* base);
+    static bool process_relocations(const Elf64_Ehdr* header, const char* base);
+    static bool process_dynamic_section(const Elf64_Ehdr* header, const char* base);
+    static bool load_elf(const char* path, uint64_t& entry_point);
 };
 
 class DynamicLinker {
