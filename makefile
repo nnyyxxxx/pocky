@@ -59,12 +59,12 @@ run: $(KERNEL_BIN)
 	@echo "set timeout=10" > $(BUILD_DIR)/iso/boot/grub/grub.cfg
 	@echo "set default=0" >> $(BUILD_DIR)/iso/boot/grub/grub.cfg
 	@echo "" >> $(BUILD_DIR)/iso/boot/grub/grub.cfg
-	@echo "menuentry \"Kernel\" {" >> $(BUILD_DIR)/iso/boot/grub/grub.cfg
+	@echo "menuentry \"Pocky\" {" >> $(BUILD_DIR)/iso/boot/grub/grub.cfg
 	@echo "    insmod all_video" >> $(BUILD_DIR)/iso/boot/grub/grub.cfg
 	@echo "    insmod vbe" >> $(BUILD_DIR)/iso/boot/grub/grub.cfg
 	@echo "    insmod gfxterm" >> $(BUILD_DIR)/iso/boot/grub/grub.cfg
 	@echo "    set gfxpayload=keep" >> $(BUILD_DIR)/iso/boot/grub/grub.cfg
-	@echo "    echo \"Loading multiboot2 kernel...\"" >> $(BUILD_DIR)/iso/boot/grub/grub.cfg
+	@echo "    echo \"Loading Pocky...\"" >> $(BUILD_DIR)/iso/boot/grub/grub.cfg
 	@echo "    multiboot2 /boot/kernel.bin" >> $(BUILD_DIR)/iso/boot/grub/grub.cfg
 	@echo "    boot" >> $(BUILD_DIR)/iso/boot/grub/grub.cfg
 	@echo "}" >> $(BUILD_DIR)/iso/boot/grub/grub.cfg
@@ -76,19 +76,10 @@ run: $(KERNEL_BIN)
 	-pkill -f qemu-system-x86_64 || true
 	qemu-system-x86_64 -cdrom $(BUILD_DIR)/os.iso -m 512M -display gtk -no-reboot -serial stdio
 
-run_vnc: $(KERNEL_BIN)
-	@echo "Killing any existing QEMU processes..."
-	-pkill -f qemu-system-x86_64 || true
-	qemu-system-x86_64 -drive file=$(KERNEL_BIN),format=raw -display vnc=127.0.0.1:0 &
-	@echo "Waiting for QEMU to start..."
-	@sleep 1
-	@echo "Launching VNC viewer..."
-	vncviewer 127.0.0.1:0 || gvncviewer 127.0.0.1:0 || vinagre 127.0.0.1:0 || open vnc://127.0.0.1:0 || echo "Could not find a VNC viewer. Please connect manually to 127.0.0.1:5900"
-
 clean:
 	rm -rf $(BUILD_DIR)
 
 format:
 	clang-format -i $(KERNEL_CPP_SRCS)
 
-.PHONY: all run run_vnc clean format
+.PHONY: all run clean format
