@@ -6,7 +6,6 @@ using kernel::pid_t;
 
 extern char input_buffer[256];
 extern size_t input_pos;
-extern bool handling_exception;
 extern pid_t shell_pid;
 
 constexpr size_t MAX_HISTORY_SIZE = 1000;

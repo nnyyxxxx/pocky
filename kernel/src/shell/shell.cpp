@@ -17,7 +17,6 @@
 
 char input_buffer[256] = {0};
 size_t input_pos = 0;
-bool handling_exception = false;
 pid_t shell_pid = 0;
 
 char command_history[MAX_HISTORY_SIZE][256] = {0};
@@ -130,9 +129,7 @@ void cmd_crash() {
     auto& pm = kernel::ProcessManager::instance();
     pid_t pid = pm.create_process("crash", shell_pid);
 
-    handling_exception = true;
-    volatile int* ptr = nullptr;
-    *ptr = 0;
+    asm volatile("ud2");
 
     pm.terminate_process(pid);
 }
@@ -794,13 +791,6 @@ void process_keypress(char c) {
 }
 
 void process_command() {
-    if (handling_exception) {
-        printf("\n");
-        print_prompt();
-        handling_exception = false;
-        return;
-    }
-
     if (input_buffer[0] != '\0') {
         if (history_count < MAX_HISTORY_SIZE) {
             strcpy(command_history[history_count], input_buffer);
@@ -884,11 +874,9 @@ void process_command() {
         printf("\n");
     }
 
-    if (!handling_exception) {
-        print_prompt();
-        memset(input_buffer, 0, sizeof(input_buffer));
-        input_pos = 0;
-    }
+    print_prompt();
+    memset(input_buffer, 0, sizeof(input_buffer));
+    input_pos = 0;
 }
 
 void init_shell() {
@@ -896,7 +884,6 @@ void init_shell() {
     memset(command_history, 0, sizeof(command_history));
     input_pos = 0;
     history_count = 0;
-    handling_exception = false;
 
     auto& pm = kernel::ProcessManager::instance();
     shell_pid = pm.create_process("shell", 0);

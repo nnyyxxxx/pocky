@@ -124,184 +124,14 @@ struct InterruptFrame {
 
 extern "C" void isr_handler(InterruptFrame* frame) {
     if (frame->interrupt_number < 32) {
-        handling_exception = true;
-
-        if (frame->interrupt_number == 6) {
-            static int invalid_op_count = 0;
-            invalid_op_count++;
-
-            if (invalid_op_count > 1) {
-                printf("\nRecursive invalid opcode detected! Halting...\n");
-                asm volatile("cli; hlt");
-                return;
-            }
-
-            printf("\nInvalid Opcode Details:\n");
-            printf("RIP: 0x");
-            char rip[17];
-            for (int i = 15; i >= 0; i--) {
-                int digit = (frame->rip >> (i * 4)) & 0xF;
-                rip[15 - i] = digit < 10 ? '0' + digit : 'A' + digit - 10;
-            }
-            rip[16] = '\0';
-            printf(rip);
-
-            printf("\nInstruction bytes: ");
-            unsigned char* code = (unsigned char*)frame->rip;
-            for (int i = 0; i < 8; i++) {
-                char hex[3];
-                unsigned char byte = code[i];
-                hex[0] = "0123456789ABCDEF"[byte >> 4];
-                hex[1] = "0123456789ABCDEF"[byte & 0xF];
-                hex[2] = '\0';
-                printf(hex);
-                printf(" ");
-            }
-
-            printf("\n\nRegister State:");
-            printf("\nRAX: 0x");
-            char reg[17];
-            for (int i = 15; i >= 0; i--) {
-                int digit = (frame->rax >> (i * 4)) & 0xF;
-                reg[15 - i] = digit < 10 ? '0' + digit : 'A' + digit - 10;
-            }
-            reg[16] = '\0';
-            printf(reg);
-
-            printf("\nRSP: 0x");
-            for (int i = 15; i >= 0; i--) {
-                int digit = (frame->rsp >> (i * 4)) & 0xF;
-                reg[15 - i] = digit < 10 ? '0' + digit : 'A' + digit - 10;
-            }
-            printf(reg);
-
-            printf("\nCS: 0x");
-            for (int i = 3; i >= 0; i--) {
-                int digit = (frame->cs >> (i * 4)) & 0xF;
-                reg[3 - i] = digit < 10 ? '0' + digit : 'A' + digit - 10;
-            }
-            reg[4] = '\0';
-            printf(reg);
-
-            printf("\nRFLAGS: 0x");
-            for (int i = 15; i >= 0; i--) {
-                int digit = (frame->rflags >> (i * 4)) & 0xF;
-                reg[15 - i] = digit < 10 ? '0' + digit : 'A' + digit - 10;
-            }
-            reg[16] = '\0';
-            printf(reg);
-
-            printf("\n\nSystem halted.\n");
-            asm volatile("cli; hlt");
-            return;
-        }
-
-        if (frame->interrupt_number == 14) {
-            static int page_fault_count = 0;
-            page_fault_count++;
-
-            if (page_fault_count > 1) {
-                printf("\nRecursive page fault detected! Halting...\n");
-                asm volatile("cli; hlt");
-                return;
-            }
-
-            uint64_t fault_address;
-            asm volatile("mov %%cr2, %0" : "=r"(fault_address));
-
-            printf("\nPage Fault Details:\n");
-            printf("Fault Address: 0x");
-
-            char addr_hex[17];
-            for (int i = 15; i >= 0; i--) {
-                int digit = (fault_address >> (i * 4)) & 0xF;
-                addr_hex[15 - i] = digit < 10 ? '0' + digit : 'A' + digit - 10;
-            }
-            addr_hex[16] = '\0';
-            printf(addr_hex);
-
-            printf("\nPage Table Indices:\n");
-            printf("  PML4 Index: ");
-            char idx[5];
-            uint64_t pml4_idx = (fault_address >> 39) & 0x1FF;
-            for (int i = 0; i < 4; i++) {
-                idx[3 - i] = ((pml4_idx >> (i * 4)) & 0xF) < 10
-                                 ? '0' + ((pml4_idx >> (i * 4)) & 0xF)
-                                 : 'A' + (((pml4_idx >> (i * 4)) & 0xF) - 10);
-            }
-            idx[4] = '\0';
-            printf(idx);
-
-            printf("\n  PDPT Index: ");
-            uint64_t pdpt_idx = (fault_address >> 30) & 0x1FF;
-            for (int i = 0; i < 4; i++) {
-                idx[3 - i] = ((pdpt_idx >> (i * 4)) & 0xF) < 10
-                                 ? '0' + ((pdpt_idx >> (i * 4)) & 0xF)
-                                 : 'A' + (((pdpt_idx >> (i * 4)) & 0xF) - 10);
-            }
-            printf(idx);
-
-            printf("\n  PD Index: ");
-            uint64_t pd_idx = (fault_address >> 21) & 0x1FF;
-            for (int i = 0; i < 4; i++) {
-                idx[3 - i] = ((pd_idx >> (i * 4)) & 0xF) < 10
-                                 ? '0' + ((pd_idx >> (i * 4)) & 0xF)
-                                 : 'A' + (((pd_idx >> (i * 4)) & 0xF) - 10);
-            }
-            printf(idx);
-
-            printf("\n  PT Index: ");
-            uint64_t pt_idx = (fault_address >> 12) & 0x1FF;
-            for (int i = 0; i < 4; i++) {
-                idx[3 - i] = ((pt_idx >> (i * 4)) & 0xF) < 10
-                                 ? '0' + ((pt_idx >> (i * 4)) & 0xF)
-                                 : 'A' + (((pt_idx >> (i * 4)) & 0xF) - 10);
-            }
-            printf(idx);
-
-            printf("\nError Code Bits:\n");
-            printf("  P (Present): ");
-            printf((frame->error_code & 0x1) ? "1\n" : "0\n");
-            printf("  W (Write): ");
-            printf((frame->error_code & 0x2) ? "1\n" : "0\n");
-            printf("  U (User): ");
-            printf((frame->error_code & 0x4) ? "1\n" : "0\n");
-            printf("  RSVD: ");
-            printf((frame->error_code & 0x8) ? "1\n" : "0\n");
-            printf("  I/D (Instruction Fetch): ");
-            printf((frame->error_code & 0x10) ? "1\n" : "0\n");
-
-            printf("\nSystem halted.\n");
-            asm volatile("cli; hlt");
-            return;
-        }
-
-        printf("\nCPU Exception: ");
-        printf(exception_messages[frame->interrupt_number]);
-        printf("\nError Code: 0x");
-
-        char error_code[32];
-        for (int i = 0; i < 16; i++) {
-            uint8_t nibble = (frame->error_code >> (60 - i * 4)) & 0xF;
-            error_code[i] = nibble < 10 ? '0' + nibble : 'A' + nibble - 10;
-        }
-        error_code[16] = '\0';
-        printf(error_code);
-
-        printf("\nInstruction Pointer: 0x");
-        char rip[32];
-        for (int i = 0; i < 16; i++) {
-            uint8_t nibble = (frame->rip >> (60 - i * 4)) & 0xF;
-            rip[i] = nibble < 10 ? '0' + nibble : 'A' + nibble - 10;
-        }
-        rip[16] = '\0';
-        printf(rip);
-        printf("\n\n");
-
-        memset(input_buffer, 0, sizeof(input_buffer));
-        input_pos = 0;
-
-        process_command();
+        printf("Exception: %s\n", exception_messages[frame->interrupt_number]);
+        printf("Error Code: %lu\n", frame->error_code);
+        printf("RIP: 0x%lx\n", frame->rip);
+        printf("CS: 0x%lx\n", frame->cs);
+        printf("RFLAGS: 0x%lx\n", frame->rflags);
+        printf("RSP: 0x%lx\n", frame->rsp);
+        printf("SS: 0x%lx\n", frame->ss);
+        asm volatile("cli; hlt");
         return;
     } else if (frame->interrupt_number < 48) {
         uint8_t irq = frame->interrupt_number - 32;
@@ -312,10 +142,8 @@ extern "C" void isr_handler(InterruptFrame* frame) {
         if (irq == 0) {
             // timer interrupt (IRQ0) - timer_callback is called directly from timer_handler in
             // assembly
-        } else if (irq == 1) {
-            char c = keyboard_read();
-            if (c != 0) process_keypress(c);
-        }
+        } else if (irq == 1)
+            keyboard_handler();
     }
 }
 

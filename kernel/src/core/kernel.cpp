@@ -96,6 +96,8 @@ extern "C" void kernel_main() {
         vga[i + 640] = 0x0F00 | msg9[i];
     }
 
+    register_keyboard_handler(process_keypress);
+
     init_mouse();
 
     const char* msg10 = "[10] Mouse Init Done";

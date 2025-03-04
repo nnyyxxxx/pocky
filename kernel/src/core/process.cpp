@@ -194,12 +194,27 @@ bool ProcessManager::setup_process_stack(Process* process, char* const argv[], c
     process->user_stack = USER_STACK_TOP;
     uint64_t* stack_ptr = reinterpret_cast<uint64_t*>(USER_STACK_TOP);
 
+    size_t required_space = sizeof(uint64_t);
+
     int argc = 0;
     if (argv) {
         while (argv[argc])
             argc++;
     }
     process->argc = argc;
+    required_space += (argc + 1) * sizeof(char*);
+
+    int envc = 0;
+    if (envp) {
+        while (envp[envc])
+            envc++;
+        required_space += (envc + 1) * sizeof(char*);
+    }
+
+    if (required_space > USER_STACK_SIZE) {
+        cleanup_process_memory(process);
+        return false;
+    }
 
     process->argv = new char*[argc + 1];
     for (int i = 0; i < argc; i++) {
@@ -207,10 +222,7 @@ bool ProcessManager::setup_process_stack(Process* process, char* const argv[], c
     }
     process->argv[argc] = nullptr;
 
-    int envc = 0;
     if (envp) {
-        while (envp[envc])
-            envc++;
         process->envp = new char*[envc + 1];
         for (int i = 0; i < envc; i++) {
             process->envp[i] = strdup(envp[i]);
@@ -218,25 +230,28 @@ bool ProcessManager::setup_process_stack(Process* process, char* const argv[], c
         process->envp[envc] = nullptr;
     }
 
-    *(--stack_ptr) = 0;
+    stack_ptr = reinterpret_cast<uint64_t*>(USER_STACK_TOP - required_space);
+    uint64_t current_ptr = reinterpret_cast<uint64_t>(stack_ptr);
 
-    char** envp_array = reinterpret_cast<char**>(stack_ptr - envc - 1);
-    stack_ptr -= envc + 1;
-    for (int i = 0; i < envc; i++) {
-        envp_array[i] = process->envp[i];
-    }
-    envp_array[envc] = nullptr;
+    *stack_ptr++ = argc;
 
-    char** argv_array = reinterpret_cast<char**>(stack_ptr - argc - 1);
-    stack_ptr -= argc + 1;
+    char** argv_array = reinterpret_cast<char**>(stack_ptr);
     for (int i = 0; i < argc; i++) {
         argv_array[i] = process->argv[i];
     }
     argv_array[argc] = nullptr;
+    stack_ptr += argc + 1;
 
-    *(--stack_ptr) = argc;
+    if (envp) {
+        char** envp_array = reinterpret_cast<char**>(stack_ptr);
+        for (int i = 0; i < envc; i++) {
+            envp_array[i] = process->envp[i];
+        }
+        envp_array[envc] = nullptr;
+        stack_ptr += envc + 1;
+    }
 
-    process->registers.rsp = reinterpret_cast<uint64_t>(stack_ptr);
+    process->registers.rsp = current_ptr;
     process->registers.rbp = process->registers.rsp;
     process->registers.rip = process->entry_point;
 
@@ -244,7 +259,7 @@ bool ProcessManager::setup_process_stack(Process* process, char* const argv[], c
     process->registers.ss = 0x1B;
     process->registers.rflags = 0x202;
 
-    add_memory_region(process, stack_bottom, USER_STACK_SIZE, true, false);
+    add_memory_region(process, USER_STACK_TOP - USER_STACK_SIZE, USER_STACK_SIZE, true, false);
 
     return true;
 }

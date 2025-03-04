@@ -140,6 +140,12 @@ int vprintf(const char* format, va_list args) {
                 format++;
             }
 
+            bool is_long = false;
+            if (*format == 'l') {
+                is_long = true;
+                format++;
+            }
+
             switch (*format) {
                 case 'f': {
                     if (precision < 0) precision = 6;
@@ -149,18 +155,20 @@ int vprintf(const char* format, va_list args) {
                 case 'd':
                     if (is_size_t)
                         print_unsigned(va_arg(args, size_t), 10, width, pad_zero);
+                    else if (is_long)
+                        print_number(va_arg(args, long), 10, width, pad_zero);
                     else
                         print_number(va_arg(args, int), 10, width, pad_zero);
                     break;
                 case 'u':
-                    if (is_size_t)
-                        print_unsigned(va_arg(args, size_t), 10, width, pad_zero);
+                    if (is_size_t || is_long)
+                        print_unsigned(va_arg(args, unsigned long), 10, width, pad_zero);
                     else
                         print_unsigned(va_arg(args, unsigned int), 10, width, pad_zero);
                     break;
                 case 'x':
-                    if (is_size_t)
-                        print_hex(va_arg(args, size_t), width, pad_zero);
+                    if (is_size_t || is_long)
+                        print_hex(va_arg(args, unsigned long), width, pad_zero);
                     else
                         print_hex(va_arg(args, unsigned int), width, pad_zero);
                     break;
