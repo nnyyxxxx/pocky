@@ -127,7 +127,7 @@ void TextEditor::close() {
     m_modified = false;
     m_filename[0] = '\0';
 
-    terminal_writestring("\n");
+    printf("\n");
     print_prompt();
 }
 
@@ -549,16 +549,16 @@ void init_editor() {
 
 void cmd_edit(const char* filename) {
     if (!filename || !*filename) {
-        terminal_writestring("Usage: edit <filename>\n");
+        printf("Usage: edit <filename>\n");
         return;
     }
 
     auto& fs = fs::FileSystem::instance();
     auto node = fs.get_file(filename);
     if (node && node->type == fs::FileType::Directory) {
-        terminal_writestring("Cannot edit directory: ");
-        terminal_writestring(filename);
-        terminal_writestring("\n");
+        printf("Cannot edit directory: ");
+        printf(filename);
+        printf("\n");
         print_prompt();
         return;
     }
@@ -584,9 +584,9 @@ void cmd_edit(const char* filename) {
         terminal_column = 0;
         update_cursor();
 
-        terminal_writestring("Failed to open file: ");
-        terminal_writestring(filename);
-        terminal_writestring("\n");
+        printf("Failed to open file: ");
+        printf(filename);
+        printf("\n");
 
         print_prompt();
         return;

@@ -2,6 +2,10 @@
 
 #include <cstring>
 
+#include "physical_memory.hpp"
+
+constexpr size_t PAGE_SIZE = 4096;
+
 HeapAllocator& HeapAllocator::instance() {
     static HeapAllocator instance;
     return instance;
@@ -54,6 +58,19 @@ void* HeapAllocator::allocate(size_t size) {
     block->free = false;
     m_used_memory += size;
 
+    auto& pmm = PhysicalMemoryManager::instance();
+    size_t num_pages = (size + PAGE_SIZE - 1) / PAGE_SIZE;
+    for (size_t i = 0; i < num_pages; i++) {
+        void* frame = pmm.allocate_frame();
+        if (!frame) {
+            for (size_t j = 0; j < i; j++) {
+                pmm.free_frame(
+                    reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(block) + j * PAGE_SIZE));
+            }
+            return nullptr;
+        }
+    }
+
     return reinterpret_cast<uint8_t*>(block) + sizeof(HeapBlock);
 }
 
@@ -76,6 +93,12 @@ void HeapAllocator::free(void* ptr) {
 
     HeapBlock* block =
         reinterpret_cast<HeapBlock*>(reinterpret_cast<uint8_t*>(ptr) - sizeof(HeapBlock));
+
+    auto& pmm = PhysicalMemoryManager::instance();
+    size_t num_pages = (block->size + PAGE_SIZE - 1) / PAGE_SIZE;
+    for (size_t i = 0; i < num_pages; i++) {
+        pmm.free_frame(reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(block) + i * PAGE_SIZE));
+    }
 
     block->free = true;
     m_used_memory -= block->size;

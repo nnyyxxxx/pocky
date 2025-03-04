@@ -78,18 +78,6 @@ void terminal_putchar(char c) {
     update_cursor();
 }
 
-void terminal_writestring(const char* str) {
-    for (size_t i = 0; str[i] != '\0'; i++) {
-        terminal_putchar(str[i]);
-    }
-}
-
-void terminal_write(const char* data, size_t size) {
-    for (size_t i = 0; i < size; i++) {
-        terminal_putchar(data[i]);
-    }
-}
-
 void terminal_clear() {
     terminal_initialize();
 }

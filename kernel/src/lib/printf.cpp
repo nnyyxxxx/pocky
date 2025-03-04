@@ -71,7 +71,7 @@ void print_hex(unsigned long num, int width, bool pad_zero) {
         }
     }
 
-    terminal_writestring("0x");
+    printf("0x");
     int padding = width - i;
     while (padding-- > 0)
         terminal_putchar(pad_zero ? '0' : ' ');
@@ -84,6 +84,26 @@ void print_pointer(const void* ptr) {
     print_hex(reinterpret_cast<unsigned long>(ptr));
 }
 
+void print_float(double num, int precision) {
+    if (num < 0) {
+        terminal_putchar('-');
+        num = -num;
+    }
+
+    unsigned long integer_part = static_cast<unsigned long>(num);
+    print_unsigned(integer_part, 10, 0, false);
+
+    terminal_putchar('.');
+
+    double fractional = num - integer_part;
+    for (int i = 0; i < precision; i++) {
+        fractional *= 10;
+        int digit = static_cast<int>(fractional);
+        terminal_putchar('0' + digit);
+        fractional -= digit;
+    }
+}
+
 int vprintf(const char* format, va_list args) {
     int written = 0;
 
@@ -93,6 +113,7 @@ int vprintf(const char* format, va_list args) {
 
             int width = 0;
             bool pad_zero = false;
+            int precision = -1;
 
             if (*format == '0') {
                 pad_zero = true;
@@ -104,6 +125,15 @@ int vprintf(const char* format, va_list args) {
                 format++;
             }
 
+            if (*format == '.') {
+                format++;
+                precision = 0;
+                while (*format >= '0' && *format <= '9') {
+                    precision = precision * 10 + (*format - '0');
+                    format++;
+                }
+            }
+
             bool is_size_t = false;
             if (*format == 'z') {
                 is_size_t = true;
@@ -111,6 +141,11 @@ int vprintf(const char* format, va_list args) {
             }
 
             switch (*format) {
+                case 'f': {
+                    if (precision < 0) precision = 6;
+                    print_float(va_arg(args, double), precision);
+                    break;
+                }
                 case 'd':
                     if (is_size_t)
                         print_unsigned(va_arg(args, size_t), 10, width, pad_zero);
@@ -135,7 +170,7 @@ int vprintf(const char* format, va_list args) {
                 case 's': {
                     const char* str = va_arg(args, const char*);
                     if (!str) str = "(null)";
-                    terminal_writestring(str);
+                    printf(str);
                     break;
                 }
                 case '%':

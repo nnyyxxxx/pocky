@@ -4,6 +4,7 @@
 #include "idt.hpp"
 #include "io.hpp"
 #include "pic.hpp"
+#include "printf.hpp"
 #include "terminal.hpp"
 
 namespace {
@@ -40,7 +41,7 @@ void mouse_write(uint8_t cmd) {
     outb(MOUSE_DATA_PORT, cmd);
 
     uint8_t ack = mouse_read();
-    if (ack != 0xFA) terminal_writestring("Mouse command failed: ");
+    if (ack != 0xFA) printf("Mouse command failed: ");
 }
 
 }  // namespace

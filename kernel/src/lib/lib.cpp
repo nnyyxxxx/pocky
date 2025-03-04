@@ -2,6 +2,7 @@
 #include <cstdint>
 
 #include "memory/heap.hpp"
+#include "printf.hpp"
 #include "terminal.hpp"
 
 extern "C" size_t strlen(const char* str) {
@@ -68,7 +69,7 @@ extern "C" void* memmove(void* dest, const void* src, size_t count) {
 }
 
 extern "C" [[noreturn]] void __stack_chk_fail() {
-    terminal_writestring("\nStack smashing detected! Aborting...\n");
+    printf("\nStack smashing detected! Aborting...\n");
     while (true) {
         asm volatile("cli; hlt");
     }
@@ -162,4 +163,28 @@ void operator delete(void* ptr, size_t) noexcept {
 
 void operator delete[](void* ptr, size_t) noexcept {
     HeapAllocator::instance().free(ptr);
+}
+
+bool match_wildcard(const char* pattern, const char* str) {
+    if (!pattern || !str) return false;
+
+    while (*str) {
+        if (*pattern == '*') {
+            pattern++;
+            if (!*pattern) return true;
+
+            while (*str) {
+                if (match_wildcard(pattern, str)) return true;
+                str++;
+            }
+            return false;
+        }
+        if (*pattern != *str) return false;
+        pattern++;
+        str++;
+    }
+
+    while (*pattern == '*')
+        pattern++;
+    return !*pattern;
 }

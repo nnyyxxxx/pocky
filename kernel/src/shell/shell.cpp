@@ -7,6 +7,7 @@
 #include "fs/filesystem.hpp"
 #include "graphics.hpp"
 #include "io.hpp"
+#include "lib/lib.hpp"
 #include "physical_memory.hpp"
 #include "printf.hpp"
 #include "terminal.hpp"
@@ -42,55 +43,75 @@ void split_path(const char* input, char* first, char* second) {
 
 void print_file_type(const fs::FileNode* node) {
     if (node->type == fs::FileType::Directory)
-        terminal_writestring("d");
+        printf("d");
     else
-        terminal_writestring("f");
+        printf("f");
 }
 
 void print_file_name(const fs::FileNode* node) {
-    terminal_writestring(" ");
-    terminal_writestring(node->name);
-    if (node->type == fs::FileType::Directory) terminal_writestring("/");
+    printf(" ");
+    printf(node->name);
+    if (node->type == fs::FileType::Directory) printf("/");
 }
 
 void list_callback(const fs::FileNode* node) {
     print_file_type(node);
     print_file_name(node);
-    terminal_writestring("\n");
+    printf("\n");
+}
+
+template <typename F>
+void handle_wildcard_command(const char* pattern, F cmd_fn) {
+    auto& fs = fs::FileSystem::instance();
+    fs::FileNode* current = fs.get_current_directory();
+    fs::FileNode* child = current->first_child;
+    bool found = false;
+
+    while (child) {
+        if (match_wildcard(pattern, child->name)) {
+            cmd_fn(child->name);
+            found = true;
+        }
+        child = child->next_sibling;
+    }
+
+    if (!found) {
+        printf("No matches found for pattern: ");
+        printf(pattern);
+        printf("\n");
+    }
 }
 
 }  // namespace
 
 void cmd_help() {
-    terminal_writestring("\n");
-    terminal_writestring("Available commands:\n");
-    terminal_writestring("  help     - Show this help message\n");
-    terminal_writestring("  echo     - Echo the arguments\n");
-    terminal_writestring("  clear    - Clear the screen\n");
-    terminal_writestring("  crash    - Trigger a crash (for testing)\n");
-    terminal_writestring("  memory   - Show memory usage\n");
-    terminal_writestring("  ls       - List directory contents\n");
-    terminal_writestring("  mkdir    - Create a new directory\n");
-    terminal_writestring("  cd       - Change current directory\n");
-    terminal_writestring("  cat      - Display file contents\n");
-    terminal_writestring("  cp       - Copy a file\n");
-    terminal_writestring("  mv       - Move/rename a file\n");
-    terminal_writestring("  rm       - Remove a file or directory\n");
-    terminal_writestring("  touch    - Create an empty file\n");
-    terminal_writestring("  edit     - Edit a file\n");
-    terminal_writestring("  history  - Show command history\n");
-    terminal_writestring("  uptime   - Show system uptime\n");
-    terminal_writestring("  shutdown - Power off the system\n");
-    terminal_writestring("  graphics - Enter graphics mode\n");
-    terminal_writestring("  TAB      - Auto-complete a dir,file, this is not a command\n");
-    terminal_writestring("\n");
+    printf("Available commands:\n");
+    printf("  help     - Show this help message\n");
+    printf("  echo     - Echo the arguments\n");
+    printf("  clear    - Clear the screen\n");
+    printf("  crash    - Trigger a crash (for testing)\n");
+    printf("  memory   - Show memory usage\n");
+    printf("  ls       - List directory contents\n");
+    printf("  mkdir    - Create a new directory\n");
+    printf("  cd       - Change current directory\n");
+    printf("  cat      - Display file contents\n");
+    printf("  cp       - Copy a file\n");
+    printf("  mv       - Move/rename a file\n");
+    printf("  rm       - Remove a file or directory\n");
+    printf("  touch    - Create an empty file\n");
+    printf("  edit     - Edit a file\n");
+    printf("  history  - Show command history\n");
+    printf("  uptime   - Show system uptime\n");
+    printf("  shutdown - Power off the system\n");
+    printf("  graphics - Enter graphics mode\n");
+    printf("  TAB      - Auto-complete a dir,file, this is not a command\n");
     command_running = false;
 }
 
 void cmd_echo(const char* args) {
     command_running = true;
-    terminal_writestring(args);
-    terminal_writestring("\n");
+    printf(args);
+    printf("\n");
     command_running = false;
 }
 
@@ -104,7 +125,7 @@ void cmd_crash() {
 
 void cmd_shutdown() {
     command_running = true;
-    terminal_writestring("\nShutting down the system...\n");
+    printf("\nShutting down the system...\n");
 
     outb(0x604, 0x00);
     outb(0x604, 0x01);
@@ -114,7 +135,7 @@ void cmd_shutdown() {
 
     outb(0x64, 0xFE);
 
-    terminal_writestring("Shutdown failed.\n");
+    printf("Shutdown failed.\n");
 
     asm volatile("cli");
     for (;;) {
@@ -131,7 +152,7 @@ void cmd_memory() {
     size_t total_frames = pmm.get_total_frames();
 
     if (total_frames == 0 || free_frames > total_frames) {
-        terminal_writestring("\nError: Invalid memory state\n");
+        printf("Error: Invalid memory state\n");
         command_running = false;
         return;
     }
@@ -140,7 +161,7 @@ void cmd_memory() {
 
     constexpr size_t max_size = static_cast<size_t>(-1);
     if (total_frames > max_size / PhysicalMemoryManager::PAGE_SIZE) {
-        terminal_writestring("\nError: Memory size too large to represent\n");
+        printf("Error: Memory size too large to represent\n");
         command_running = false;
         return;
     }
@@ -149,11 +170,10 @@ void cmd_memory() {
     size_t used_bytes = used_frames * PhysicalMemoryManager::PAGE_SIZE;
 
     constexpr size_t bytes_per_mb = 1024 * 1024;
-    size_t total_mb = total_bytes / bytes_per_mb;
-    size_t used_mb = used_bytes / bytes_per_mb;
+    double total_mb = static_cast<double>(total_bytes) / bytes_per_mb;
+    double used_mb = static_cast<double>(used_bytes) / bytes_per_mb;
 
-    terminal_writestring("\n");
-    printf("%u MB used of available %u MB\n\n", used_mb, total_mb);
+    printf("%.2f MB used of available %.2f MB\n", used_mb, total_mb);
 
     command_running = false;
 }
@@ -168,16 +188,16 @@ void cmd_ls(const char* path) {
 void cmd_mkdir(const char* path) {
     command_running = true;
     if (!path || !*path) {
-        terminal_writestring("mkdir: missing operand\n");
+        printf("mkdir: missing operand\n");
         command_running = false;
         return;
     }
 
     auto& fs = fs::FileSystem::instance();
     if (!fs.create_file(path, fs::FileType::Directory)) {
-        terminal_writestring("mkdir: cannot create directory '");
-        terminal_writestring(path);
-        terminal_writestring("'\n");
+        printf("mkdir: cannot create directory '");
+        printf(path);
+        printf("'\n");
     }
     command_running = false;
 }
@@ -193,9 +213,9 @@ void cmd_cd(const char* path) {
     }
 
     if (!fs.change_directory(path)) {
-        terminal_writestring("cd: cannot change directory to '");
-        terminal_writestring(path);
-        terminal_writestring("'\n");
+        printf("cd: cannot change directory to '");
+        printf(path);
+        printf("'\n");
     }
     command_running = false;
 }
@@ -203,7 +223,38 @@ void cmd_cd(const char* path) {
 void cmd_cat(const char* path) {
     command_running = true;
     if (!path || !*path) {
-        terminal_writestring("cat: missing operand\n");
+        printf("cat: missing operand\n");
+        command_running = false;
+        return;
+    }
+
+    if (strchr(path, '*')) {
+        handle_wildcard_command(path, [](const char* matched_path) {
+            auto& fs = fs::FileSystem::instance();
+            auto node = fs.get_file(matched_path);
+            if (!node || node->type != fs::FileType::Regular) return;
+
+            printf("==> ");
+            printf(matched_path);
+            printf(" <==\n");
+
+            uint8_t buffer[1024];
+            size_t remaining = node->size;
+            size_t offset = 0;
+
+            while (remaining > 0) {
+                size_t to_read = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
+                if (!fs.read_file(matched_path, buffer + offset, to_read)) break;
+
+                for (size_t i = 0; i < to_read; i++) {
+                    terminal_putchar(buffer[i]);
+                }
+
+                remaining -= to_read;
+                offset += to_read;
+            }
+            printf("\n\n");
+        });
         command_running = false;
         return;
     }
@@ -211,9 +262,9 @@ void cmd_cat(const char* path) {
     auto& fs = fs::FileSystem::instance();
     auto node = fs.get_file(path);
     if (!node || node->type != fs::FileType::Regular) {
-        terminal_writestring("cat: cannot read '");
-        terminal_writestring(path);
-        terminal_writestring("'\n");
+        printf("cat: cannot read '");
+        printf(path);
+        printf("'\n");
         command_running = false;
         return;
     }
@@ -233,7 +284,7 @@ void cmd_cat(const char* path) {
         remaining -= to_read;
         offset += to_read;
     }
-    terminal_writestring("\n");
+    printf("\n");
     command_running = false;
 }
 
@@ -244,7 +295,36 @@ void cmd_cp(const char* args) {
     split_path(args, src, dst);
 
     if (!*src || !*dst) {
-        terminal_writestring("cp: missing operand\n");
+        printf("cp: missing operand\n");
+        command_running = false;
+        return;
+    }
+
+    if (strchr(src, '*')) {
+        handle_wildcard_command(src, [dst](const char* matched_path) {
+            auto& fs = fs::FileSystem::instance();
+            auto src_node = fs.get_file(matched_path);
+            if (!src_node || src_node->type != fs::FileType::Regular) return;
+
+            char full_dst[fs::MAX_PATH];
+            strcpy(full_dst, dst);
+            if (dst[strlen(dst) - 1] == '/') {
+                strcat(full_dst, matched_path);
+            }
+
+            auto dst_node = fs.create_file(full_dst, fs::FileType::Regular);
+            if (!dst_node) {
+                printf("cp: cannot create '");
+                printf(full_dst);
+                printf("'\n");
+                return;
+            }
+
+            if (!fs.write_file(full_dst, src_node->data, src_node->size)) {
+                printf("cp: write error\n");
+                fs.delete_file(full_dst);
+            }
+        });
         command_running = false;
         return;
     }
@@ -252,24 +332,24 @@ void cmd_cp(const char* args) {
     auto& fs = fs::FileSystem::instance();
     auto src_node = fs.get_file(src);
     if (!src_node || src_node->type != fs::FileType::Regular) {
-        terminal_writestring("cp: cannot read '");
-        terminal_writestring(src);
-        terminal_writestring("'\n");
+        printf("cp: cannot read '");
+        printf(src);
+        printf("'\n");
         command_running = false;
         return;
     }
 
     auto dst_node = fs.create_file(dst, fs::FileType::Regular);
     if (!dst_node) {
-        terminal_writestring("cp: cannot create '");
-        terminal_writestring(dst);
-        terminal_writestring("'\n");
+        printf("cp: cannot create '");
+        printf(dst);
+        printf("'\n");
         command_running = false;
         return;
     }
 
     if (!fs.write_file(dst, src_node->data, src_node->size)) {
-        terminal_writestring("cp: write error\n");
+        printf("cp: write error\n");
         fs.delete_file(dst);
     }
     command_running = false;
@@ -282,7 +362,41 @@ void cmd_mv(const char* args) {
     split_path(args, src, dst);
 
     if (!*src || !*dst) {
-        terminal_writestring("mv: missing operand\n");
+        printf("mv: missing operand\n");
+        command_running = false;
+        return;
+    }
+
+    if (strchr(src, '*')) {
+        handle_wildcard_command(src, [dst](const char* matched_path) {
+            auto& fs = fs::FileSystem::instance();
+            auto src_node = fs.get_file(matched_path);
+            if (!src_node) return;
+
+            char full_dst[fs::MAX_PATH];
+            strcpy(full_dst, dst);
+            if (dst[strlen(dst) - 1] == '/') {
+                strcat(full_dst, matched_path);
+            }
+
+            if (src_node->type == fs::FileType::Regular) {
+                auto dst_node = fs.create_file(full_dst, fs::FileType::Regular);
+                if (!dst_node) {
+                    printf("mv: cannot create '");
+                    printf(full_dst);
+                    printf("'\n");
+                    return;
+                }
+
+                if (!fs.write_file(full_dst, src_node->data, src_node->size)) {
+                    printf("mv: write error\n");
+                    fs.delete_file(full_dst);
+                    return;
+                }
+
+                fs.delete_file(matched_path);
+            }
+        });
         command_running = false;
         return;
     }
@@ -290,9 +404,9 @@ void cmd_mv(const char* args) {
     auto& fs = fs::FileSystem::instance();
     auto src_node = fs.get_file(src);
     if (!src_node) {
-        terminal_writestring("mv: cannot stat '");
-        terminal_writestring(src);
-        terminal_writestring("'\n");
+        printf("mv: cannot stat '");
+        printf(src);
+        printf("'\n");
         command_running = false;
         return;
     }
@@ -300,35 +414,48 @@ void cmd_mv(const char* args) {
     if (src_node->type == fs::FileType::Regular) {
         cmd_cp(args);
         if (!fs.delete_file(src)) {
-            terminal_writestring("mv: cannot remove '");
-            terminal_writestring(src);
-            terminal_writestring("'\n");
+            printf("mv: cannot remove '");
+            printf(src);
+            printf("'\n");
         }
     } else
-        terminal_writestring("mv: directory move not supported\n");
+        printf("mv: directory move not supported\n");
     command_running = false;
 }
 
 void cmd_rm(const char* path) {
     command_running = true;
     if (!path || !*path) {
-        terminal_writestring("rm: missing operand\n");
+        printf("rm: missing operand\n");
+        command_running = false;
+        return;
+    }
+
+    if (strchr(path, '*')) {
+        handle_wildcard_command(path, [](const char* matched_path) {
+            auto& fs = fs::FileSystem::instance();
+            if (!fs.delete_file(matched_path)) {
+                printf("rm: cannot remove '");
+                printf(matched_path);
+                printf("'\n");
+            }
+        });
         command_running = false;
         return;
     }
 
     auto& fs = fs::FileSystem::instance();
     if (!fs.delete_file(path)) {
-        terminal_writestring("rm: cannot remove '");
-        terminal_writestring(path);
-        terminal_writestring("'\n");
+        printf("rm: cannot remove '");
+        printf(path);
+        printf("'\n");
     }
     command_running = false;
 }
 
 void cmd_touch(const char* path) {
     if (!path) {
-        terminal_writestring("Usage: touch <path>\n");
+        printf("Usage: touch <path>\n");
         return;
     }
 
@@ -336,9 +463,9 @@ void cmd_touch(const char* path) {
     auto* file = fs.create_file(path, fs::FileType::Regular);
 
     if (!file) {
-        terminal_writestring("Failed to create file: ");
-        terminal_writestring(path);
-        terminal_writestring("\n");
+        printf("Failed to create file: ");
+        printf(path);
+        printf("\n");
     }
 }
 
@@ -353,9 +480,9 @@ void cmd_history() {
 
     for (size_t i = 0; i < history_count; i++) {
         print_number(i + 1, 10, 4, false);
-        terminal_writestring("  ");
-        terminal_writestring(command_history[i]);
-        terminal_writestring("\n");
+        printf("  ");
+        printf(command_history[i]);
+        printf("\n");
     }
 
     command_running = false;
@@ -367,9 +494,9 @@ void cmd_uptime() {
     char uptime_str[100] = {0};
     format_uptime(uptime_str, sizeof(uptime_str));
 
-    terminal_writestring("System uptime: ");
-    terminal_writestring(uptime_str);
-    terminal_writestring("\n");
+    printf("System uptime: ");
+    printf(uptime_str);
+    printf("\n");
 
     command_running = false;
 }
@@ -385,7 +512,7 @@ void cmd_graphics() {
 
 void interrupt_command() {
     if (command_running) {
-        terminal_writestring("\nCommand interrupted\n");
+        printf("\nCommand interrupted\n");
         command_running = false;
     }
 }
@@ -410,16 +537,16 @@ void handle_redirection(const char* command) {
         *end-- = '\0';
 
     if (!*filename) {
-        terminal_writestring("No output file specified\n");
+        printf("No output file specified\n");
         return;
     }
 
     auto& fs = fs::FileSystem::instance();
     auto* file = fs.create_file(filename, fs::FileType::Regular);
     if (!file) {
-        terminal_writestring("Failed to create file: ");
-        terminal_writestring(filename);
-        terminal_writestring("\n");
+        printf("Failed to create file: ");
+        printf(filename);
+        printf("\n");
         return;
     }
 
@@ -436,8 +563,8 @@ void handle_redirection(const char* command) {
 
 void print_prompt() {
     auto& fs = fs::FileSystem::instance();
-    terminal_writestring(fs.get_current_path());
-    terminal_writestring(" $ ");
+    printf(fs.get_current_path());
+    printf(" $ ");
 }
 
 void handle_tab_completion() {
@@ -479,7 +606,7 @@ void handle_tab_completion() {
         const char* completion = match + word_len;
         strcpy(input_buffer + pos + word_len, completion);
         input_pos = strlen(input_buffer);
-        terminal_writestring(completion);
+        printf(completion);
     }
 }
 
@@ -522,7 +649,7 @@ void process_keypress(char c) {
 
 void process_command() {
     if (handling_exception) {
-        terminal_writestring("\n");
+        printf("\n");
         print_prompt();
         handling_exception = false;
         return;
@@ -600,9 +727,9 @@ void process_command() {
     else if (strcmp(input_buffer, "graphics") == 0)
         cmd_graphics();
     else if (input_buffer[0] != '\0') {
-        terminal_writestring("Unknown command: ");
-        terminal_writestring(input_buffer);
-        terminal_writestring("\n");
+        printf("Unknown command: ");
+        printf(input_buffer);
+        printf("\n");
     }
 
     if (!handling_exception) {
@@ -619,7 +746,7 @@ void init_shell() {
     history_count = 0;
     handling_exception = false;
     command_running = false;
-    terminal_writestring("\n");
+    printf("\n");
     print_prompt();
     editor::init_editor();
 }

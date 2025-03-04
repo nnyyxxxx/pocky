@@ -3,6 +3,7 @@
 #include "elf.hpp"
 #include "heap.hpp"
 #include "physical_memory.hpp"
+#include "printf.hpp"
 #include "terminal.hpp"
 #include "virtual_memory.hpp"
 
@@ -50,7 +51,7 @@ static Elf64_Shdr* find_section_by_name(Elf64_Ehdr* ehdr, const char* name) {
 bool DynamicLinker::locate_got(const Elf64_Ehdr* ehdr, uint64_t& got_base) {
     Elf64_Shdr* got_plt = find_section_by_name(const_cast<Elf64_Ehdr*>(ehdr), ".got.plt");
     if (!got_plt) {
-        terminal_writestring("ERROR: Could not find .got.plt section\n");
+        printf("ERROR: Could not find .got.plt section\n");
         return false;
     }
 
@@ -61,7 +62,7 @@ bool DynamicLinker::locate_got(const Elf64_Ehdr* ehdr, uint64_t& got_base) {
 bool DynamicLinker::process_dynamic_section(const Elf64_Ehdr* ehdr, const char* base) {
     Elf64_Shdr* dyn_section = find_section_by_type(const_cast<Elf64_Ehdr*>(ehdr), SHT_DYNAMIC);
     if (!dyn_section) {
-        terminal_writestring("ERROR: Could not find dynamic section\n");
+        printf("ERROR: Could not find dynamic section\n");
         return false;
     }
 
@@ -70,7 +71,7 @@ bool DynamicLinker::process_dynamic_section(const Elf64_Ehdr* ehdr, const char* 
 
     Elf64_Shdr* strtab_section = find_section_by_type(const_cast<Elf64_Ehdr*>(ehdr), SHT_STRTAB);
     if (!strtab_section) {
-        terminal_writestring("ERROR: Could not find string table section\n");
+        printf("ERROR: Could not find string table section\n");
         return false;
     }
 
@@ -79,12 +80,12 @@ bool DynamicLinker::process_dynamic_section(const Elf64_Ehdr* ehdr, const char* 
     for (size_t i = 0; dyn_entries[i].d_tag != DT_NULL; i++) {
         if (dyn_entries[i].d_tag == DT_NEEDED) {
             const char* lib_name = strtab + dyn_entries[i].d_val;
-            terminal_writestring("Loading shared library: ");
-            terminal_writestring(lib_name);
-            terminal_writestring("\n");
+            printf("Loading shared library: ");
+            printf(lib_name);
+            printf("\n");
 
             if (!load_shared_library(lib_name)) {
-                terminal_writestring("ERROR: Failed to load shared library\n");
+                printf("ERROR: Failed to load shared library\n");
                 return false;
             }
         }
@@ -123,19 +124,19 @@ void* DynamicLinker::lookup_symbol(const char* name, const Elf64_Ehdr* lib_ehdr)
 bool DynamicLinker::process_relocations(const Elf64_Ehdr* ehdr, const char* base) {
     Elf64_Shdr* rela_plt = find_section_by_name(const_cast<Elf64_Ehdr*>(ehdr), ".rela.plt");
     if (!rela_plt) {
-        terminal_writestring("ERROR: Could not find relocation table\n");
+        printf("ERROR: Could not find relocation table\n");
         return false;
     }
 
     Elf64_Shdr* dynsym = find_section_by_type(const_cast<Elf64_Ehdr*>(ehdr), SHT_DYNSYM);
     if (!dynsym) {
-        terminal_writestring("ERROR: Could not find dynamic symbol table\n");
+        printf("ERROR: Could not find dynamic symbol table\n");
         return false;
     }
 
     Elf64_Shdr* dynstr = find_section_by_type(const_cast<Elf64_Ehdr*>(ehdr), SHT_STRTAB);
     if (!dynstr) {
-        terminal_writestring("ERROR: Could not find dynamic string table\n");
+        printf("ERROR: Could not find dynamic string table\n");
         return false;
     }
 
@@ -161,9 +162,9 @@ bool DynamicLinker::process_relocations(const Elf64_Ehdr* ehdr, const char* base
         if (symbol_addr)
             *reinterpret_cast<uint64_t*>(rel->r_offset) = reinterpret_cast<uint64_t>(symbol_addr);
         else {
-            terminal_writestring("ERROR: Could not resolve symbol: ");
-            terminal_writestring(symbol_name);
-            terminal_writestring("\n");
+            printf("ERROR: Could not resolve symbol: ");
+            printf(symbol_name);
+            printf("\n");
             return false;
         }
     }
@@ -184,7 +185,7 @@ bool DynamicLinker::initialize() {
 
 bool DynamicLinker::load_shared_library(const char* path) {
     if (num_loaded_libraries >= MAX_LOADED_LIBRARIES) {
-        terminal_writestring("ERROR: Too many loaded libraries\n");
+        printf("ERROR: Too many loaded libraries\n");
         return false;
     }
 
@@ -193,7 +194,7 @@ bool DynamicLinker::load_shared_library(const char* path) {
     size_t name_len = strlen(path) + 1;
     lib.name = static_cast<char*>(HeapAllocator::instance().allocate(name_len));
     if (!lib.name) {
-        terminal_writestring("ERROR: Failed to allocate memory for library name\n");
+        printf("ERROR: Failed to allocate memory for library name\n");
         return false;
     }
     strcpy(lib.name, path);
@@ -221,7 +222,7 @@ void* DynamicLinker::resolve_symbol(const char* symbol_name) {
 }
 
 void* DynamicLinker::runtime_resolver([[maybe_unused]] uint64_t got_base, uint64_t) {
-    terminal_writestring("Dynamic symbol resolution called\n");
+    printf("Dynamic symbol resolution called\n");
     return reinterpret_cast<void*>(0);
 }
 

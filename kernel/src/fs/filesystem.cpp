@@ -3,6 +3,9 @@
 #include <cstring>
 
 #include "memory/heap.hpp"
+#include "physical_memory.hpp"
+
+constexpr size_t PAGE_SIZE = 4096;
 
 namespace fs {
 
@@ -18,7 +21,15 @@ FileNode::FileNode(const char* name, FileType type)
 }
 
 FileNode::~FileNode() {
-    if (data) delete[] data;
+    if (data) {
+        auto& pmm = PhysicalMemoryManager::instance();
+        size_t num_pages = (size + PAGE_SIZE - 1) / PAGE_SIZE;
+        uintptr_t base_addr = reinterpret_cast<uintptr_t>(data) & ~(PAGE_SIZE - 1);
+        for (size_t i = 0; i < num_pages; i++) {
+            pmm.free_frame(reinterpret_cast<void*>(base_addr + i * PAGE_SIZE));
+        }
+        delete[] data;
+    }
 
     FileNode* child = first_child;
     while (child) {
@@ -203,11 +214,40 @@ bool FileSystem::write_file(const char* path, const uint8_t* data, size_t size) 
     FileNode* node = resolve_path(path);
     if (!node || node->type != FileType::Regular) return false;
 
+    size_t num_pages = (size + PAGE_SIZE - 1) / PAGE_SIZE;
+    auto& pmm = PhysicalMemoryManager::instance();
+
+    for (size_t i = 0; i < num_pages; i++) {
+        void* frame = pmm.allocate_frame();
+        if (!frame) {
+            for (size_t j = 0; j < i; j++) {
+                uintptr_t base_addr = reinterpret_cast<uintptr_t>(node->data) & ~(PAGE_SIZE - 1);
+                pmm.free_frame(reinterpret_cast<void*>(base_addr + j * PAGE_SIZE));
+            }
+            return false;
+        }
+    }
+
     uint8_t* new_data = new uint8_t[size];
-    if (!new_data) return false;
+    if (!new_data) {
+        for (size_t i = 0; i < num_pages; i++) {
+            uintptr_t base_addr = reinterpret_cast<uintptr_t>(node->data) & ~(PAGE_SIZE - 1);
+            pmm.free_frame(reinterpret_cast<void*>(base_addr + i * PAGE_SIZE));
+        }
+        return false;
+    }
 
     memcpy(new_data, data, size);
-    delete[] node->data;
+
+    if (node->data) {
+        size_t old_num_pages = (node->size + PAGE_SIZE - 1) / PAGE_SIZE;
+        uintptr_t base_addr = reinterpret_cast<uintptr_t>(node->data) & ~(PAGE_SIZE - 1);
+        for (size_t i = 0; i < old_num_pages; i++) {
+            pmm.free_frame(reinterpret_cast<void*>(base_addr + i * PAGE_SIZE));
+        }
+        delete[] node->data;
+    }
+
     node->data = new_data;
     node->size = size;
 

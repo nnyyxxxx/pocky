@@ -11,6 +11,7 @@
 #include "multiboot2.hpp"
 #include "physical_memory.hpp"
 #include "pic.hpp"
+#include "printf.hpp"
 #include "shell.hpp"
 #include "terminal.hpp"
 #include "timer.hpp"
@@ -123,8 +124,8 @@ extern "C" void kernel_main() {
     kernel::DynamicLinker::initialize();
 
     terminal_initialize();
-    terminal_writestring("Welcome to the Kernel!\n");
-    terminal_writestring("Type 'help' to see the list of available commands.\n");
+    printf("Welcome to the Kernel!\n");
+    printf("Type 'help' to see the list of available commands.\n");
 
     graphics_initialize();
 
