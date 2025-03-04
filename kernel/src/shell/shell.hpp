@@ -2,6 +2,7 @@
 #include <cstddef>
 #include "core/types.hpp"
 #include "rtc.hpp"
+#include "pager.hpp"
 
 using kernel::pid_t;
 
@@ -37,6 +38,7 @@ void cmd_count();
 void cmd_ps();
 void cmd_pkill(const char* args);
 void cmd_time();
+void cmd_less(const char* path);
 void init_shell();
 void interrupt_command();
 void handle_tab_completion();

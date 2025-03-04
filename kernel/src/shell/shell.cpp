@@ -9,6 +9,7 @@
 #include "graphics.hpp"
 #include "io.hpp"
 #include "lib/lib.hpp"
+#include "pager.hpp"
 #include "physical_memory.hpp"
 #include "printf.hpp"
 #include "terminal.hpp"
@@ -88,30 +89,33 @@ void cmd_help() {
     auto& pm = kernel::ProcessManager::instance();
     pid_t pid = pm.create_process("help", shell_pid);
 
-    printf("Available commands:\n");
-    printf("  help     - Show this help message\n");
-    printf("  echo     - Echo the arguments\n");
-    printf("  clear    - Clear the screen\n");
-    printf("  crash    - Trigger a crash (for testing)\n");
-    printf("  memory   - Show memory usage\n");
-    printf("  ls       - List directory contents\n");
-    printf("  mkdir    - Create a new directory\n");
-    printf("  cd       - Change current directory\n");
-    printf("  cat      - Display file contents\n");
-    printf("  cp       - Copy a file\n");
-    printf("  mv       - Move/rename a file\n");
-    printf("  rm       - Remove a file or directory\n");
-    printf("  touch    - Create an empty file\n");
-    printf("  edit     - Edit a file\n");
-    printf("  history  - Show command history\n");
-    printf("  uptime   - Show system uptime\n");
-    printf("  time     - Show current UTC time\n");
-    printf("  shutdown - Power off the system\n");
-    printf("  graphics - Enter graphics mode\n");
-    printf("  count    - Count from 0 to idk\n");
-    printf("  ps       - List running processes\n");
-    printf("  pkill    - Kill a process\n");
-    printf("  TAB      - Auto-complete a dir,file, this is not a command\n");
+    static const char* help_text = "Available commands:\n"
+                                   "  help     - Show this help message\n"
+                                   "  echo     - Echo the arguments\n"
+                                   "  clear    - Clear the screen\n"
+                                   "  crash    - Trigger a crash (for testing)\n"
+                                   "  memory   - Show memory usage\n"
+                                   "  ls       - List directory contents\n"
+                                   "  mkdir    - Create a new directory\n"
+                                   "  cd       - Change current directory\n"
+                                   "  cat      - Display file contents\n"
+                                   "  cp       - Copy a file\n"
+                                   "  mv       - Move/rename a file\n"
+                                   "  rm       - Remove a file or directory\n"
+                                   "  touch    - Create an empty file\n"
+                                   "  edit     - Edit a file\n"
+                                   "  history  - Show command history\n"
+                                   "  uptime   - Show system uptime\n"
+                                   "  time     - Show current UTC time\n"
+                                   "  shutdown - Power off the system\n"
+                                   "  graphics - Enter graphics mode\n"
+                                   "  count    - Count from 0 to idk\n"
+                                   "  ps       - List running processes\n"
+                                   "  pkill    - Kill a process\n"
+                                   "  less     - View file contents with paging\n"
+                                   "  TAB      - Auto-complete a dir,file, this is not a command\n";
+
+    pager::show_text(help_text);
 
     pm.terminate_process(pid);
 }
@@ -657,6 +661,42 @@ void cmd_count() {
     pm.terminate_process(pid);
 }
 
+void cmd_less(const char* path) {
+    auto& pm = kernel::ProcessManager::instance();
+    pid_t pid = pm.create_process("less", shell_pid);
+
+    if (!path) {
+        printf("Usage: less <path>\n");
+        pm.terminate_process(pid);
+        return;
+    }
+
+    auto& fs = fs::FileSystem::instance();
+    auto* file = fs.get_file(path);
+    if (!file || file->type != fs::FileType::Regular) {
+        printf("less: cannot read '");
+        printf(path);
+        printf("'\n");
+        pm.terminate_process(pid);
+        return;
+    }
+
+    char* text = new char[file->size + 1];
+    if (!text) {
+        printf("less: memory allocation failed\n");
+        pm.terminate_process(pid);
+        return;
+    }
+
+    fs.read_file(path, reinterpret_cast<uint8_t*>(text), file->size);
+    text[file->size] = '\0';
+
+    pager::show_text(text);
+
+    delete[] text;
+    pm.terminate_process(pid);
+}
+
 void interrupt_command() {
     auto& pm = kernel::ProcessManager::instance();
     kernel::Process* current = pm.get_first_process();
@@ -772,6 +812,11 @@ void process_keypress(char c) {
         return;
     }
 
+    if (pager::is_active()) {
+        pager::process_keypress(c);
+        return;
+    }
+
     if (c == '\t') {
         handle_tab_completion();
         return;
@@ -881,13 +926,15 @@ void process_command() {
         cmd_count();
     else if (strcmp(input_buffer, "time") == 0)
         cmd_time();
+    else if (strcmp(input_buffer, "less") == 0)
+        cmd_less(args);
     else if (input_buffer[0] != '\0') {
         printf("Unknown command: ");
         printf(input_buffer);
         printf("\n");
     }
 
-    print_prompt();
+    if (!pager::is_active()) print_prompt();
     memset(input_buffer, 0, sizeof(input_buffer));
     input_pos = 0;
 }
@@ -900,6 +947,8 @@ void init_shell() {
 
     auto& pm = kernel::ProcessManager::instance();
     shell_pid = pm.create_process("shell", 0);
+
+    pager::init_pager();
 
     printf("\n");
     print_prompt();
