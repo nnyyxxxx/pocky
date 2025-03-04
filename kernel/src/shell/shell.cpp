@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include "core/process.hpp"
 #include "editor.hpp"
 #include "fs/filesystem.hpp"
 #include "graphics.hpp"
@@ -17,7 +18,7 @@
 char input_buffer[256] = {0};
 size_t input_pos = 0;
 bool handling_exception = false;
-bool command_running = false;
+pid_t shell_pid = 0;
 
 char command_history[MAX_HISTORY_SIZE][256] = {0};
 size_t history_count = 0;
@@ -85,6 +86,9 @@ void handle_wildcard_command(const char* pattern, F cmd_fn) {
 }  // namespace
 
 void cmd_help() {
+    auto& pm = kernel::ProcessManager::instance();
+    pid_t pid = pm.create_process("help", shell_pid);
+
     printf("Available commands:\n");
     printf("  help     - Show this help message\n");
     printf("  echo     - Echo the arguments\n");
@@ -105,27 +109,38 @@ void cmd_help() {
     printf("  shutdown - Power off the system\n");
     printf("  graphics - Enter graphics mode\n");
     printf("  count    - Count from 0 to idk\n");
+    printf("  ps       - List running processes\n");
+    printf("  pkill    - Kill a process\n");
     printf("  TAB      - Auto-complete a dir,file, this is not a command\n");
-    command_running = false;
+
+    pm.terminate_process(pid);
 }
 
 void cmd_echo(const char* args) {
-    command_running = true;
+    auto& pm = kernel::ProcessManager::instance();
+    pid_t pid = pm.create_process("echo", shell_pid);
+
     printf(args);
     printf("\n");
-    command_running = false;
+
+    pm.terminate_process(pid);
 }
 
 void cmd_crash() {
-    command_running = true;
+    auto& pm = kernel::ProcessManager::instance();
+    pid_t pid = pm.create_process("crash", shell_pid);
+
     handling_exception = true;
     volatile int* ptr = nullptr;
     *ptr = 0;
-    command_running = false;
+
+    pm.terminate_process(pid);
 }
 
 void cmd_shutdown() {
-    command_running = true;
+    auto& pm = kernel::ProcessManager::instance();
+    pid_t pid = pm.create_process("shutdown", shell_pid);
+
     printf("\nShutting down the system...\n");
 
     outb(0x604, 0x00);
@@ -142,11 +157,14 @@ void cmd_shutdown() {
     for (;;) {
         asm volatile("hlt");
     }
-    command_running = false;
+
+    pm.terminate_process(pid);
 }
 
 void cmd_memory() {
-    command_running = true;
+    auto& pm = kernel::ProcessManager::instance();
+    pid_t pid = pm.create_process("memory", shell_pid);
+
     auto& pmm = PhysicalMemoryManager::instance();
 
     size_t free_frames = pmm.get_free_frames();
@@ -154,7 +172,7 @@ void cmd_memory() {
 
     if (total_frames == 0 || free_frames > total_frames) {
         printf("Error: Invalid memory state\n");
-        command_running = false;
+        pm.terminate_process(pid);
         return;
     }
 
@@ -163,7 +181,7 @@ void cmd_memory() {
     constexpr size_t max_size = static_cast<size_t>(-1);
     if (total_frames > max_size / PhysicalMemoryManager::PAGE_SIZE) {
         printf("Error: Memory size too large to represent\n");
-        command_running = false;
+        pm.terminate_process(pid);
         return;
     }
 
@@ -176,21 +194,26 @@ void cmd_memory() {
 
     printf("%.2f MB used of available %.2f MB\n", used_mb, total_mb);
 
-    command_running = false;
+    pm.terminate_process(pid);
 }
 
 void cmd_ls(const char* path) {
-    command_running = true;
+    auto& pm = kernel::ProcessManager::instance();
+    pid_t pid = pm.create_process("ls", shell_pid);
+
     auto& fs = fs::FileSystem::instance();
     fs.list_directory(path, list_callback);
-    command_running = false;
+
+    pm.terminate_process(pid);
 }
 
 void cmd_mkdir(const char* path) {
-    command_running = true;
+    auto& pm = kernel::ProcessManager::instance();
+    pid_t pid = pm.create_process("mkdir", shell_pid);
+
     if (!path || !*path) {
         printf("mkdir: missing operand\n");
-        command_running = false;
+        pm.terminate_process(pid);
         return;
     }
 
@@ -200,16 +223,19 @@ void cmd_mkdir(const char* path) {
         printf(path);
         printf("'\n");
     }
-    command_running = false;
+
+    pm.terminate_process(pid);
 }
 
 void cmd_cd(const char* path) {
-    command_running = true;
+    auto& pm = kernel::ProcessManager::instance();
+    pid_t pid = pm.create_process("cd", shell_pid);
+
     auto& fs = fs::FileSystem::instance();
 
     if (!path || !*path) {
         fs.change_directory("/");
-        command_running = false;
+        pm.terminate_process(pid);
         return;
     }
 
@@ -218,14 +244,17 @@ void cmd_cd(const char* path) {
         printf(path);
         printf("'\n");
     }
-    command_running = false;
+
+    pm.terminate_process(pid);
 }
 
 void cmd_cat(const char* path) {
-    command_running = true;
+    auto& pm = kernel::ProcessManager::instance();
+    pid_t pid = pm.create_process("cat", shell_pid);
+
     if (!path || !*path) {
         printf("cat: missing operand\n");
-        command_running = false;
+        pm.terminate_process(pid);
         return;
     }
 
@@ -256,7 +285,7 @@ void cmd_cat(const char* path) {
             }
             printf("\n\n");
         });
-        command_running = false;
+        pm.terminate_process(pid);
         return;
     }
 
@@ -266,7 +295,7 @@ void cmd_cat(const char* path) {
         printf("cat: cannot read '");
         printf(path);
         printf("'\n");
-        command_running = false;
+        pm.terminate_process(pid);
         return;
     }
 
@@ -286,18 +315,21 @@ void cmd_cat(const char* path) {
         offset += to_read;
     }
     printf("\n");
-    command_running = false;
+
+    pm.terminate_process(pid);
 }
 
 void cmd_cp(const char* args) {
-    command_running = true;
+    auto& pm = kernel::ProcessManager::instance();
+    pid_t pid = pm.create_process("cp", shell_pid);
+
     char src[fs::MAX_PATH];
     char dst[fs::MAX_PATH];
     split_path(args, src, dst);
 
     if (!*src || !*dst) {
         printf("cp: missing operand\n");
-        command_running = false;
+        pm.terminate_process(pid);
         return;
     }
 
@@ -326,7 +358,7 @@ void cmd_cp(const char* args) {
                 fs.delete_file(full_dst);
             }
         });
-        command_running = false;
+        pm.terminate_process(pid);
         return;
     }
 
@@ -336,7 +368,7 @@ void cmd_cp(const char* args) {
         printf("cp: cannot read '");
         printf(src);
         printf("'\n");
-        command_running = false;
+        pm.terminate_process(pid);
         return;
     }
 
@@ -345,7 +377,7 @@ void cmd_cp(const char* args) {
         printf("cp: cannot create '");
         printf(dst);
         printf("'\n");
-        command_running = false;
+        pm.terminate_process(pid);
         return;
     }
 
@@ -353,18 +385,21 @@ void cmd_cp(const char* args) {
         printf("cp: write error\n");
         fs.delete_file(dst);
     }
-    command_running = false;
+
+    pm.terminate_process(pid);
 }
 
 void cmd_mv(const char* args) {
-    command_running = true;
+    auto& pm = kernel::ProcessManager::instance();
+    pid_t pid = pm.create_process("mv", shell_pid);
+
     char src[fs::MAX_PATH];
     char dst[fs::MAX_PATH];
     split_path(args, src, dst);
 
     if (!*src || !*dst) {
         printf("mv: missing operand\n");
-        command_running = false;
+        pm.terminate_process(pid);
         return;
     }
 
@@ -398,7 +433,7 @@ void cmd_mv(const char* args) {
                 fs.delete_file(matched_path);
             }
         });
-        command_running = false;
+        pm.terminate_process(pid);
         return;
     }
 
@@ -408,7 +443,7 @@ void cmd_mv(const char* args) {
         printf("mv: cannot stat '");
         printf(src);
         printf("'\n");
-        command_running = false;
+        pm.terminate_process(pid);
         return;
     }
 
@@ -421,14 +456,17 @@ void cmd_mv(const char* args) {
         }
     } else
         printf("mv: directory move not supported\n");
-    command_running = false;
+
+    pm.terminate_process(pid);
 }
 
 void cmd_rm(const char* path) {
-    command_running = true;
+    auto& pm = kernel::ProcessManager::instance();
+    pid_t pid = pm.create_process("rm", shell_pid);
+
     if (!path || !*path) {
         printf("rm: missing operand\n");
-        command_running = false;
+        pm.terminate_process(pid);
         return;
     }
 
@@ -441,7 +479,7 @@ void cmd_rm(const char* path) {
                 printf("'\n");
             }
         });
-        command_running = false;
+        pm.terminate_process(pid);
         return;
     }
 
@@ -451,12 +489,17 @@ void cmd_rm(const char* path) {
         printf(path);
         printf("'\n");
     }
-    command_running = false;
+
+    pm.terminate_process(pid);
 }
 
 void cmd_touch(const char* path) {
+    auto& pm = kernel::ProcessManager::instance();
+    pid_t pid = pm.create_process("touch", shell_pid);
+
     if (!path) {
         printf("Usage: touch <path>\n");
+        pm.terminate_process(pid);
         return;
     }
 
@@ -468,16 +511,22 @@ void cmd_touch(const char* path) {
         printf(path);
         printf("\n");
     }
+
+    pm.terminate_process(pid);
 }
 
 void cmd_edit(const char* path) {
-    command_running = true;
+    auto& pm = kernel::ProcessManager::instance();
+    pid_t pid = pm.create_process("edit", shell_pid);
+
     editor::cmd_edit(path);
-    command_running = false;
+
+    pm.terminate_process(pid);
 }
 
 void cmd_history() {
-    command_running = true;
+    auto& pm = kernel::ProcessManager::instance();
+    pid_t pid = pm.create_process("history", shell_pid);
 
     for (size_t i = 0; i < history_count; i++) {
         print_number(i + 1, 10, 4, false);
@@ -486,11 +535,12 @@ void cmd_history() {
         printf("\n");
     }
 
-    command_running = false;
+    pm.terminate_process(pid);
 }
 
 void cmd_uptime() {
-    command_running = true;
+    auto& pm = kernel::ProcessManager::instance();
+    pid_t pid = pm.create_process("uptime", shell_pid);
 
     char uptime_str[100] = {0};
     format_uptime(uptime_str, sizeof(uptime_str));
@@ -499,33 +549,117 @@ void cmd_uptime() {
     printf(uptime_str);
     printf("\n");
 
-    command_running = false;
+    pm.terminate_process(pid);
 }
 
 void cmd_graphics() {
-    command_running = true;
+    auto& pm = kernel::ProcessManager::instance();
+    pid_t pid = pm.create_process("graphics", shell_pid);
+
     for (volatile int i = 0; i < 1000000; i++)
         ;
 
     enter_graphics_mode();
-    command_running = false;
+
+    pm.terminate_process(pid);
+}
+
+void cmd_ps() {
+    auto& pm = kernel::ProcessManager::instance();
+    pid_t pid = pm.create_process("ps", shell_pid);
+
+    printf("  PID  PPID  STATE    NAME\n");
+
+    kernel::Process* current = pm.get_first_process();
+    while (current) {
+        printf("%5d %5d  ", current->pid, current->ppid);
+
+        switch (current->state) {
+            case kernel::ProcessState::Running:
+                printf("Running  ");
+                break;
+            case kernel::ProcessState::Stopped:
+                printf("Stopped  ");
+                break;
+            case kernel::ProcessState::Zombie:
+                printf("Zombie   ");
+                break;
+        }
+
+        printf(current->name);
+        printf("\n");
+
+        current = current->next;
+    }
+
+    pm.terminate_process(pid);
+}
+
+void cmd_pkill(const char* args) {
+    auto& pm = kernel::ProcessManager::instance();
+    pid_t pid = pm.create_process("pkill", shell_pid);
+
+    if (!args) {
+        printf("pkill: missing process id\n");
+        pm.terminate_process(pid);
+        return;
+    }
+
+    pid_t target_pid = 0;
+    while (*args) {
+        if (*args < '0' || *args > '9') {
+            printf("pkill: invalid process id\n");
+            pm.terminate_process(pid);
+            return;
+        }
+        target_pid = target_pid * 10 + (*args - '0');
+        args++;
+    }
+
+    if (target_pid == shell_pid) {
+        printf("pkill: cannot kill shell process\n");
+        pm.terminate_process(pid);
+        return;
+    }
+
+    kernel::Process* target = pm.get_process(target_pid);
+    if (!target) {
+        printf("pkill: no such process\n");
+        pm.terminate_process(pid);
+        return;
+    }
+
+    pm.terminate_process(target_pid);
+    pm.terminate_process(pid);
 }
 
 void cmd_count() {
-    command_running = true;
+    auto& pm = kernel::ProcessManager::instance();
+    pid_t pid = pm.create_process("count", shell_pid);
     size_t count = 0;
 
-    while (command_running) {
+    kernel::Process* process = pm.get_process(pid);
+    while (process && process->state == kernel::ProcessState::Running) {
         printf("Count: %zu\n", count++);
         for (volatile size_t i = 0; i < 100000000; i++)
             ;
+        process = pm.get_process(pid);
     }
+
+    pm.terminate_process(pid);
 }
 
 void interrupt_command() {
-    if (command_running) {
-        printf("\nCommand interrupted\n");
-        command_running = false;
+    auto& pm = kernel::ProcessManager::instance();
+    kernel::Process* current = pm.get_first_process();
+
+    while (current) {
+        if (current->state == kernel::ProcessState::Running && current->pid != shell_pid) {
+            printf("\nCommand interrupted\n");
+            pm.terminate_process(current->pid);
+            return;
+        }
+        current = current->next;
     }
 }
 
@@ -738,6 +872,10 @@ void process_command() {
         cmd_shutdown();
     else if (strcmp(input_buffer, "graphics") == 0)
         cmd_graphics();
+    else if (strcmp(input_buffer, "ps") == 0)
+        cmd_ps();
+    else if (strcmp(input_buffer, "pkill") == 0)
+        cmd_pkill(args);
     else if (strcmp(input_buffer, "count") == 0)
         cmd_count();
     else if (input_buffer[0] != '\0') {
@@ -759,7 +897,10 @@ void init_shell() {
     input_pos = 0;
     history_count = 0;
     handling_exception = false;
-    command_running = false;
+
+    auto& pm = kernel::ProcessManager::instance();
+    shell_pid = pm.create_process("shell", 0);
+
     printf("\n");
     print_prompt();
     editor::init_editor();

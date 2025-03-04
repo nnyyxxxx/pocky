@@ -1,10 +1,13 @@
 #pragma once
 #include <cstddef>
+#include "core/types.hpp"
+
+using kernel::pid_t;
 
 extern char input_buffer[256];
 extern size_t input_pos;
 extern bool handling_exception;
-extern bool command_running;
+extern pid_t shell_pid;
 
 constexpr size_t MAX_HISTORY_SIZE = 1000;
 extern char command_history[MAX_HISTORY_SIZE][256];
@@ -30,6 +33,9 @@ void cmd_history();
 void cmd_uptime();
 void cmd_edit(const char* path);
 void cmd_graphics();
+void cmd_count();
+void cmd_ps();
+void cmd_pkill(const char* args);
 void init_shell();
 void interrupt_command();
 void handle_tab_completion();
