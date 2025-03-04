@@ -104,6 +104,7 @@ void cmd_help() {
     printf("  uptime   - Show system uptime\n");
     printf("  shutdown - Power off the system\n");
     printf("  graphics - Enter graphics mode\n");
+    printf("  count    - Count from 0 to idk\n");
     printf("  TAB      - Auto-complete a dir,file, this is not a command\n");
     command_running = false;
 }
@@ -510,6 +511,17 @@ void cmd_graphics() {
     command_running = false;
 }
 
+void cmd_count() {
+    command_running = true;
+    size_t count = 0;
+
+    while (command_running) {
+        printf("Count: %zu\n", count++);
+        for (volatile size_t i = 0; i < 100000000; i++)
+            ;
+    }
+}
+
 void interrupt_command() {
     if (command_running) {
         printf("\nCommand interrupted\n");
@@ -726,6 +738,8 @@ void process_command() {
         cmd_shutdown();
     else if (strcmp(input_buffer, "graphics") == 0)
         cmd_graphics();
+    else if (strcmp(input_buffer, "count") == 0)
+        cmd_count();
     else if (input_buffer[0] != '\0') {
         printf("Unknown command: ");
         printf(input_buffer);
