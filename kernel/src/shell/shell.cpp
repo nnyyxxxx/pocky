@@ -105,6 +105,7 @@ void cmd_help() {
     printf("  edit     - Edit a file\n");
     printf("  history  - Show command history\n");
     printf("  uptime   - Show system uptime\n");
+    printf("  time     - Show current UTC time\n");
     printf("  shutdown - Power off the system\n");
     printf("  graphics - Enter graphics mode\n");
     printf("  count    - Count from 0 to idk\n");
@@ -549,6 +550,16 @@ void cmd_uptime() {
     pm.terminate_process(pid);
 }
 
+void cmd_time() {
+    auto& pm = kernel::ProcessManager::instance();
+    pid_t pid = pm.create_process("time", shell_pid);
+
+    RTCTime time = get_rtc_time();
+    printf("Current UTC time: %02u:%02u:%02u\n", time.hours, time.minutes, time.seconds);
+
+    pm.terminate_process(pid);
+}
+
 void cmd_graphics() {
     auto& pm = kernel::ProcessManager::instance();
     pid_t pid = pm.create_process("graphics", shell_pid);
@@ -868,6 +879,8 @@ void process_command() {
         cmd_pkill(args);
     else if (strcmp(input_buffer, "count") == 0)
         cmd_count();
+    else if (strcmp(input_buffer, "time") == 0)
+        cmd_time();
     else if (input_buffer[0] != '\0') {
         printf("Unknown command: ");
         printf(input_buffer);

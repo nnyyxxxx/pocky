@@ -12,6 +12,7 @@
 #include "physical_memory.hpp"
 #include "pic.hpp"
 #include "printf.hpp"
+#include "rtc.hpp"
 #include "shell.hpp"
 #include "terminal.hpp"
 #include "timer.hpp"
@@ -112,15 +113,22 @@ extern "C" void kernel_main() {
         vga[i + 800] = 0x0F00 | msg11[i];
     }
 
+    init_rtc();
+
+    const char* msg12 = "[12] RTC Init Done";
+    for (int i = 0; msg12[i] != '\0'; i++) {
+        vga[i + 880] = 0x0F00 | msg12[i];
+    }
+
     auto& heap = HeapAllocator::instance();
     heap.initialize(heap_start, HEAP_SIZE);
 
     auto& fs = fs::FileSystem::instance();
     fs.initialize();
 
-    const char* msg12 = "[12] Filesystem Init Done";
-    for (int i = 0; msg12[i] != '\0'; i++) {
-        vga[i + 880] = 0x0F00 | msg12[i];
+    const char* msg13 = "[13] Filesystem Init Done";
+    for (int i = 0; msg13[i] != '\0'; i++) {
+        vga[i + 960] = 0x0F00 | msg13[i];
     }
 
     kernel::DynamicLinker::initialize();
