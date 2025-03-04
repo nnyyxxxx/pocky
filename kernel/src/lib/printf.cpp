@@ -184,6 +184,9 @@ int vprintf(const char* format, va_list args) {
                 case '%':
                     terminal_putchar('%');
                     break;
+                case 'c':
+                    terminal_putchar(va_arg(args, int));
+                    break;
                 default:
                     terminal_putchar('%');
                     terminal_putchar(*format);

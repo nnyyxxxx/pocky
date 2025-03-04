@@ -38,7 +38,7 @@ void display_current_page() {
         if (current_line + rows >= line_count)
             printf("(END %lu%%) q:quit", percent);
         else
-            printf("(%lu%%) j/↓:down k/↑:up q:quit", percent);
+            printf("(%lu%%) j/%c:down k/%c:up q:quit", percent, 25, 24);
     }
 
     terminal_color = old_color;
