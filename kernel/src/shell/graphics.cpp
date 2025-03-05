@@ -300,9 +300,9 @@ void render_mouse_cursor(int32_t x, int32_t y) {
 }
 
 void draw_char(uint16_t x, uint16_t y, char c, uint8_t color) {
-    if (c < 32 || c > 127) return;
+    if (static_cast<unsigned char>(c) < 32 || static_cast<unsigned char>(c) > 127) return;
 
-    const uint8_t* char_data = font8x8[c - 32];
+    const uint8_t* char_data = font8x8[static_cast<unsigned char>(c) - 32];
 
     for (uint8_t row = 0; row < 8; row++) {
         for (uint8_t col = 0; col < 8; col++) {
