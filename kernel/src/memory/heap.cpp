@@ -82,9 +82,8 @@ void HeapAllocator::merge_free_blocks() {
             current->size += sizeof(HeapBlock) + current->next->size;
             current->next = current->next->next;
             m_used_memory -= sizeof(HeapBlock);
-        } else {
+        } else
             current = current->next;
-        }
     }
 }
 
