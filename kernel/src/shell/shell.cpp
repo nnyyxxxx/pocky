@@ -4,6 +4,8 @@
 #include <cstring>
 
 #include "core/process.hpp"
+#include "core/types.hpp"
+#include "drivers/keyboard.hpp"
 #include "editor.hpp"
 #include "fs/filesystem.hpp"
 #include "graphics.hpp"
@@ -12,6 +14,8 @@
 #include "pager.hpp"
 #include "physical_memory.hpp"
 #include "printf.hpp"
+#include "rtc.hpp"
+#include "screen_state.hpp"
 #include "terminal.hpp"
 #include "timer.hpp"
 #include "vga.hpp"
@@ -949,6 +953,8 @@ void init_shell() {
     shell_pid = pm.create_process("shell", 0);
 
     pager::init_pager();
+
+    screen_state::init();
 
     printf("\n");
     print_prompt();

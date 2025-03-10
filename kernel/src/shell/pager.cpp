@@ -3,6 +3,7 @@
 #include <cstring>
 
 #include "printf.hpp"
+#include "screen_state.hpp"
 #include "shell.hpp"
 #include "terminal.hpp"
 #include "vga.hpp"
@@ -76,6 +77,8 @@ void init_pager() {
 }
 
 void show_text(const char* text) {
+    screen_state::save();
+
     split_text(text);
     current_line = 0;
     pager_active = true;
@@ -151,7 +154,7 @@ bool is_active() {
 
 void clear() {
     pager_active = false;
-    terminal_clear();
+    screen_state::restore();
     print_prompt();
 }
 

@@ -6,6 +6,7 @@
 #include "fs/filesystem.hpp"
 #include "io.hpp"
 #include "printf.hpp"
+#include "screen_state.hpp"
 #include "shell.hpp"
 #include "terminal.hpp"
 #include "vga.hpp"
@@ -105,17 +106,12 @@ void TextEditor::close() {
 
     m_active = false;
 
-    for (uint16_t y = 0; y < TERMINAL_HEIGHT; y++) {
-        for (uint16_t x = 0; x < TERMINAL_WIDTH; x++) {
-            terminal_putchar_at(' ', TEXT_COLOR, x, y);
-        }
-    }
+    outb(VGA_CTRL_PORT, 0x0A);
+    outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xC0) | CURSOR_INSERT_START);
+    outb(VGA_CTRL_PORT, 0x0B);
+    outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xE0) | CURSOR_INSERT_END);
 
-    terminal_row = 0;
-    terminal_column = 0;
-
-    cursor_initialize();
-    update_cursor();
+    screen_state::restore();
 
     m_buffer_size = 0;
     m_cursor_pos = 0;
@@ -124,10 +120,10 @@ void TextEditor::close() {
     m_screen_row = 0;
     m_screen_col = 0;
     m_screen_offset = 0;
-    m_modified = false;
+    m_mode = EditorMode::NORMAL;
     m_filename[0] = '\0';
+    m_modified = false;
 
-    printf("\n");
     print_prompt();
 }
 
@@ -550,6 +546,7 @@ void init_editor() {
 void cmd_edit(const char* filename) {
     if (!filename || !*filename) {
         printf("Usage: edit <filename>\n");
+        print_prompt();
         return;
     }
 
@@ -563,11 +560,7 @@ void cmd_edit(const char* filename) {
         return;
     }
 
-    for (uint16_t y = 0; y < TERMINAL_HEIGHT; y++) {
-        for (uint16_t x = 0; x < TERMINAL_WIDTH; x++) {
-            terminal_putchar_at(' ', TEXT_COLOR, x, y);
-        }
-    }
+    screen_state::save();
 
     terminal_row = 0;
     terminal_column = 0;
@@ -575,21 +568,11 @@ void cmd_edit(const char* filename) {
 
     auto& editor = TextEditor::instance();
     if (!editor.open(filename)) {
-        for (uint16_t y = 0; y < TERMINAL_HEIGHT; y++) {
-            for (uint16_t x = 0; x < TERMINAL_WIDTH; x++) {
-                terminal_putchar_at(' ', TEXT_COLOR, x, y);
-            }
-        }
-        terminal_row = 0;
-        terminal_column = 0;
-        update_cursor();
-
+        screen_state::restore();
         printf("Failed to open file: ");
         printf(filename);
         printf("\n");
-
         print_prompt();
-        return;
     }
 }
 
