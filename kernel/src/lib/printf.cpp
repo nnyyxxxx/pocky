@@ -35,7 +35,7 @@ void print_number(int num, int base, int width, bool pad_zero) {
         terminal_putchar(buffer[i]);
 }
 
-void print_unsigned(unsigned long num, int base, int width, bool pad_zero) {
+void print_unsigned(unsigned long long num, int base, int width, bool pad_zero) {
     char buffer[PRINT_BUFFER_SIZE] = {0};
     size_t i = 0;
 
@@ -43,7 +43,7 @@ void print_unsigned(unsigned long num, int base, int width, bool pad_zero) {
         buffer[i++] = '0';
     else {
         while (num > 0 && i < PRINT_BUFFER_SIZE - 1) {
-            unsigned long digit = num % base;
+            unsigned long long digit = num % base;
             buffer[i++] = digit < 10 ? '0' + digit : 'a' + digit - 10;
             num /= base;
         }
@@ -57,7 +57,7 @@ void print_unsigned(unsigned long num, int base, int width, bool pad_zero) {
         terminal_putchar(buffer[i]);
 }
 
-void print_hex(unsigned long num, int width, bool pad_zero) {
+void print_hex(unsigned long long num, int width, bool pad_zero) {
     char buffer[PRINT_BUFFER_SIZE] = {0};
     size_t i = 0;
 
@@ -81,7 +81,7 @@ void print_hex(unsigned long num, int width, bool pad_zero) {
 }
 
 void print_pointer(const void* ptr) {
-    print_hex(reinterpret_cast<unsigned long>(ptr));
+    print_hex(reinterpret_cast<unsigned long long>(ptr));
 }
 
 void print_float(double num, int precision) {
@@ -141,9 +141,15 @@ int vprintf(const char* format, va_list args) {
             }
 
             bool is_long = false;
+            bool is_long_long = false;
             if (*format == 'l') {
                 is_long = true;
                 format++;
+                if (*format == 'l') {
+                    is_long = false;
+                    is_long_long = true;
+                    format++;
+                }
             }
 
             switch (*format) {
@@ -155,19 +161,25 @@ int vprintf(const char* format, va_list args) {
                 case 'd':
                     if (is_size_t)
                         print_unsigned(va_arg(args, size_t), 10, width, pad_zero);
+                    else if (is_long_long)
+                        print_number(va_arg(args, long long), 10, width, pad_zero);
                     else if (is_long)
                         print_number(va_arg(args, long), 10, width, pad_zero);
                     else
                         print_number(va_arg(args, int), 10, width, pad_zero);
                     break;
                 case 'u':
-                    if (is_size_t || is_long)
+                    if (is_size_t || is_long_long)
+                        print_unsigned(va_arg(args, unsigned long long), 10, width, pad_zero);
+                    else if (is_long)
                         print_unsigned(va_arg(args, unsigned long), 10, width, pad_zero);
                     else
                         print_unsigned(va_arg(args, unsigned int), 10, width, pad_zero);
                     break;
                 case 'x':
-                    if (is_size_t || is_long)
+                    if (is_size_t || is_long_long)
+                        print_hex(va_arg(args, unsigned long long), width, pad_zero);
+                    else if (is_long)
                         print_hex(va_arg(args, unsigned long), width, pad_zero);
                     else
                         print_hex(va_arg(args, unsigned int), width, pad_zero);
