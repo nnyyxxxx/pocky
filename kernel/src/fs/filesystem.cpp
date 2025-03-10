@@ -50,8 +50,11 @@ bool FileSystem::initialize() {
     m_root = create_node("/", FileType::Directory);
     m_current_dir = m_root;
 
+    FileNode* tmp_dir = create_file("tmp", FileType::Directory);
+    if (!tmp_dir) return false;
+
     const char* welcome_content = "welcome to the kernel :)";
-    FileNode* welcome = create_file("welcome", FileType::Regular);
+    FileNode* welcome = create_file("tmp/welcome", FileType::Regular);
     if (welcome) {
         size_t content_size = strlen(welcome_content);
         welcome->data = new uint8_t[content_size];
@@ -61,11 +64,11 @@ bool FileSystem::initialize() {
         }
     }
 
-    FileNode* dir = create_file("directory", FileType::Directory);
+    FileNode* dir = create_file("tmp/directory", FileType::Directory);
     if (dir) {
         const char* dir_welcome = "this is a directory you can make more directories "
                                   "or add files, have fun :)";
-        FileNode* example = create_file("directory/example", FileType::Regular);
+        FileNode* example = create_file("tmp/directory/example", FileType::Regular);
         if (example) {
             size_t content_size = strlen(dir_welcome);
             example->data = new uint8_t[content_size];
