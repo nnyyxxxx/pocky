@@ -748,8 +748,18 @@ void handle_redirection(const char* command) {
 
 void print_prompt() {
     auto& fs = fs::FileSystem::instance();
-    printf(fs.get_current_path());
-    printf(" $ ");
+
+    const char* full_path = fs.get_current_path();
+
+    const char* dir_name = full_path;
+    if (strcmp(full_path, "/") == 0)
+        dir_name = "/";
+    else {
+        const char* last_slash = strrchr(full_path, '/');
+        if (last_slash && *(last_slash + 1) != '\0') dir_name = last_slash + 1;
+    }
+
+    printf("[root@pocky %s]$ ", dir_name);
 }
 
 void handle_tab_completion() {
