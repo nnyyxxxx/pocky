@@ -29,7 +29,9 @@ KERNEL_ASM_OBJS = $(patsubst $(KERNEL_SRC)/asm/%.asm,$(BUILD_DIR)/asm/%_asm.o,$(
 KERNEL_OBJ = $(KERNEL_ASM_OBJS) $(KERNEL_CPP_OBJS)
 KERNEL_BIN = $(BUILD_DIR)/kernel.bin
 
-all: format clean $(KERNEL_BIN)
+default: format $(KERNEL_BIN)
+
+all: clean default
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)/core
