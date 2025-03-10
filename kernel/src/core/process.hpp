@@ -11,6 +11,8 @@ enum class ProcessState {
     Running,
     Stopped,
     Zombie,
+    Ready,
+    Waiting,
 };
 
 struct RegisterState {
@@ -63,6 +65,11 @@ struct Process {
     char** argv = nullptr;
     char** envp = nullptr;
     int argc = 0;
+
+    uint8_t priority = 5;
+    uint64_t total_runtime = 0;
+    uint64_t last_run = 0;
+    void* waiting_on = nullptr;
 };
 
 class ProcessManager {

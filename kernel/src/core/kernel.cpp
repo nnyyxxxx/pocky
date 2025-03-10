@@ -6,13 +6,18 @@
 #include "heap.hpp"
 #include "idt.hpp"
 #include "io.hpp"
+#include "ipc.hpp"
 #include "keyboard.hpp"
+#include "lib/string.hpp"
+#include "lib/vector.hpp"
 #include "mouse.hpp"
 #include "multiboot2.hpp"
 #include "physical_memory.hpp"
 #include "pic.hpp"
 #include "printf.hpp"
+#include "process.hpp"
 #include "rtc.hpp"
+#include "scheduler.hpp"
 #include "shell.hpp"
 #include "terminal.hpp"
 #include "timer.hpp"
@@ -129,6 +134,14 @@ extern "C" void kernel_main() {
     const char* msg13 = "[13] Filesystem Init Done";
     for (int i = 0; msg13[i] != '\0'; i++) {
         vga[i + 960] = 0x0F00 | msg13[i];
+    }
+
+    auto& scheduler = kernel::Scheduler::instance();
+    scheduler.initialize(kernel::SchedulerPolicy::RoundRobin);
+
+    const char* msg14 = "[14] Scheduler Init Done";
+    for (int i = 0; msg14[i] != '\0'; i++) {
+        vga[i + 1040] = 0x0F00 | msg14[i];
     }
 
     kernel::DynamicLinker::initialize();

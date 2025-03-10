@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include "core/scheduler.hpp"
 #include "idt.hpp"
 #include "io.hpp"
 #include "pic.hpp"
@@ -17,6 +18,8 @@ extern "C" void timer_handler();
 
 extern "C" void timer_callback() {
     timer_ticks++;
+
+    kernel::Scheduler::instance().tick();
 }
 
 void append_number(char* buffer, size_t& pos, size_t max_size, uint64_t num) {

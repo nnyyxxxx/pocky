@@ -6,6 +6,7 @@
 #include "memory/heap.hpp"
 #include "memory/physical_memory.hpp"
 #include "memory/virtual_memory.hpp"
+#include "scheduler.hpp"
 
 namespace kernel {
 
@@ -41,7 +42,7 @@ pid_t ProcessManager::create_process(const char* name, pid_t ppid) {
     process->pid = m_next_pid++;
     process->ppid = ppid;
     process->name = strdup(name);
-    process->state = ProcessState::Running;
+    process->state = ProcessState::Ready;
     process->next = m_first_process;
 
     auto& pmm = PhysicalMemoryManager::instance();
@@ -67,6 +68,8 @@ pid_t ProcessManager::create_process(const char* name, pid_t ppid) {
     m_first_process = process;
     if (!m_current_process) m_current_process = process;
 
+    Scheduler::instance().add_process(process);
+
     return process->pid;
 }
 
@@ -80,6 +83,8 @@ void ProcessManager::terminate_process(pid_t pid) {
                 prev->next = current->next;
             else
                 m_first_process = current->next;
+
+            Scheduler::instance().remove_process(current);
 
             cleanup_process_memory(current);
 
@@ -101,9 +106,7 @@ void ProcessManager::terminate_process(pid_t pid) {
 
             if (m_current_process == current) {
                 m_current_process = m_first_process;
-                if (m_current_process) {
-                    switch_to_process(m_current_process);
-                }
+                if (m_current_process) Scheduler::instance().schedule();
             }
 
             delete current;
@@ -265,11 +268,19 @@ bool ProcessManager::setup_process_stack(Process* process, char* const argv[], c
 }
 
 void ProcessManager::switch_to_process(Process* process) {
-    if (!process || process->state != ProcessState::Running) return;
+    if (!process ||
+        ((process->state != ProcessState::Running) && (process->state != ProcessState::Ready)))
+        return;
 
     if (m_current_process != process) {
         Process* old = m_current_process;
         m_current_process = process;
+
+        if (old) {
+            if (old->state == ProcessState::Running) old->state = ProcessState::Ready;
+        }
+
+        process->state = ProcessState::Running;
 
         if (old)
             switch_context(&old->registers, &process->registers);

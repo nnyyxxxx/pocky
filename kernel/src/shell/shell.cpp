@@ -3,7 +3,9 @@
 #include <cstdio>
 #include <cstring>
 
+#include "core/ipc.hpp"
 #include "core/process.hpp"
+#include "core/scheduler.hpp"
 #include "core/types.hpp"
 #include "drivers/keyboard.hpp"
 #include "editor.hpp"
@@ -11,6 +13,8 @@
 #include "graphics.hpp"
 #include "io.hpp"
 #include "lib/lib.hpp"
+#include "lib/string.hpp"
+#include "lib/vector.hpp"
 #include "pager.hpp"
 #include "physical_memory.hpp"
 #include "printf.hpp"
@@ -103,6 +107,7 @@ void cmd_help() {
                                    "  mkdir    - Create a new directory\n"
                                    "  cd       - Change current directory\n"
                                    "  cat      - Display file contents\n"
+                                   "  less     - View file contents with paging\n"
                                    "  cp       - Copy a file\n"
                                    "  mv       - Move/rename a file\n"
                                    "  rm       - Remove a file or directory\n"
@@ -116,8 +121,9 @@ void cmd_help() {
                                    "  count    - Count from 0 to idk\n"
                                    "  ps       - List running processes\n"
                                    "  pkill    - Kill a process\n"
-                                   "  less     - View file contents with paging\n"
-                                   "  TAB      - Auto-complete a dir,file, this is not a command\n";
+                                   "  sched    - Get/set scheduler policy (rr, priority)\n"
+                                   "  priority - Set process priority (0-10)\n"
+                                   "  ipctest  - Run IPC test\n";
 
     pager::show_text(help_text);
 
@@ -600,6 +606,12 @@ void cmd_ps() {
             case kernel::ProcessState::Zombie:
                 printf("Zombie   ");
                 break;
+            case kernel::ProcessState::Ready:
+                printf("Ready    ");
+                break;
+            case kernel::ProcessState::Waiting:
+                printf("Waiting  ");
+                break;
         }
 
         printf(current->name);
@@ -851,57 +863,61 @@ void process_keypress(char c) {
 }
 
 void process_command() {
-    if (input_buffer[0] != '\0') {
-        if (history_count < MAX_HISTORY_SIZE) {
-            strcpy(command_history[history_count], input_buffer);
-            history_count++;
-        } else {
-            memmove(command_history[0], command_history[1], (MAX_HISTORY_SIZE - 1) * 256);
-            strcpy(command_history[MAX_HISTORY_SIZE - 1], input_buffer);
-        }
+    while (input_pos > 0 &&
+           (input_buffer[input_pos - 1] == ' ' || input_buffer[input_pos - 1] == '\t')) {
+        input_buffer[--input_pos] = '\0';
     }
 
-    if (strchr(input_buffer, '>')) {
-        handle_redirection(input_buffer);
+    if (input_pos == 0) {
         print_prompt();
         return;
     }
 
-    char* args = strchr(input_buffer, ' ');
-    if (args) {
-        *args = '\0';
-        args++;
-        while (*args == ' ')
-            args++;
+    if (history_count < MAX_HISTORY_SIZE)
+        memcpy(command_history[history_count++], input_buffer, input_pos + 1);
+    else {
+        memmove(command_history[0], command_history[1],
+                sizeof(command_history[0]) * (MAX_HISTORY_SIZE - 1));
+        memcpy(command_history[MAX_HISTORY_SIZE - 1], input_buffer, input_pos + 1);
     }
 
-    if (strcmp(input_buffer, "help") == 0)
+    char* cmd = input_buffer;
+    char* args = nullptr;
+    for (size_t i = 0; i < input_pos; ++i) {
+        if (input_buffer[i] == ' ') {
+            input_buffer[i] = '\0';
+            args = &input_buffer[i + 1];
+            break;
+        }
+    }
+
+    if (strcmp(cmd, "help") == 0)
         cmd_help();
-    else if (strcmp(input_buffer, "echo") == 0)
+    else if (strcmp(cmd, "echo") == 0)
         cmd_echo(args);
-    else if (strcmp(input_buffer, "clear") == 0)
+    else if (strcmp(cmd, "clear") == 0)
         terminal_clear();
-    else if (strcmp(input_buffer, "crash") == 0)
+    else if (strcmp(cmd, "crash") == 0)
         cmd_crash();
-    else if (strcmp(input_buffer, "memory") == 0)
+    else if (strcmp(cmd, "memory") == 0)
         cmd_memory();
-    else if (strcmp(input_buffer, "ls") == 0)
+    else if (strcmp(cmd, "ls") == 0)
         cmd_ls(args);
-    else if (strcmp(input_buffer, "mkdir") == 0)
+    else if (strcmp(cmd, "mkdir") == 0)
         cmd_mkdir(args);
-    else if (strcmp(input_buffer, "cd") == 0)
+    else if (strcmp(cmd, "cd") == 0)
         cmd_cd(args);
-    else if (strcmp(input_buffer, "cat") == 0)
+    else if (strcmp(cmd, "cat") == 0)
         cmd_cat(args);
-    else if (strcmp(input_buffer, "cp") == 0)
+    else if (strcmp(cmd, "cp") == 0)
         cmd_cp(args);
-    else if (strcmp(input_buffer, "mv") == 0)
+    else if (strcmp(cmd, "mv") == 0)
         cmd_mv(args);
-    else if (strcmp(input_buffer, "rm") == 0)
+    else if (strcmp(cmd, "rm") == 0)
         cmd_rm(args);
-    else if (strcmp(input_buffer, "touch") == 0)
+    else if (strcmp(cmd, "touch") == 0)
         cmd_touch(args);
-    else if (strcmp(input_buffer, "edit") == 0) {
+    else if (strcmp(cmd, "edit") == 0) {
         char filename[256];
         if (args)
             strcpy(filename, args);
@@ -912,35 +928,41 @@ void process_command() {
         input_pos = 0;
 
         cmd_edit(filename);
-
         return;
-    } else if (strcmp(input_buffer, "history") == 0)
+    } else if (strcmp(cmd, "history") == 0)
         cmd_history();
-    else if (strcmp(input_buffer, "uptime") == 0)
+    else if (strcmp(cmd, "uptime") == 0)
         cmd_uptime();
-    else if (strcmp(input_buffer, "shutdown") == 0 || strcmp(input_buffer, "poweroff") == 0)
+    else if (strcmp(cmd, "shutdown") == 0 || strcmp(cmd, "poweroff") == 0)
         cmd_shutdown();
-    else if (strcmp(input_buffer, "graphics") == 0)
+    else if (strcmp(cmd, "graphics") == 0)
         cmd_graphics();
-    else if (strcmp(input_buffer, "ps") == 0)
+    else if (strcmp(cmd, "ps") == 0)
         cmd_ps();
-    else if (strcmp(input_buffer, "pkill") == 0)
+    else if (strcmp(cmd, "pkill") == 0)
         cmd_pkill(args);
-    else if (strcmp(input_buffer, "count") == 0)
+    else if (strcmp(cmd, "count") == 0)
         cmd_count();
-    else if (strcmp(input_buffer, "time") == 0)
+    else if (strcmp(cmd, "time") == 0)
         cmd_time();
-    else if (strcmp(input_buffer, "less") == 0)
+    else if (strcmp(cmd, "less") == 0)
         cmd_less(args);
-    else if (input_buffer[0] != '\0') {
+    else if (strcmp(cmd, "sched") == 0)
+        cmd_sched_policy(args);
+    else if (strcmp(cmd, "priority") == 0)
+        cmd_priority(args);
+    else if (strcmp(cmd, "ipctest") == 0)
+        cmd_ipc_test();
+    else {
         printf("Unknown command: ");
-        printf(input_buffer);
+        printf(cmd);
         printf("\n");
     }
 
-    if (!pager::is_active()) print_prompt();
     memset(input_buffer, 0, sizeof(input_buffer));
     input_pos = 0;
+
+    if (!pager::is_active()) print_prompt();
 }
 
 void init_shell() {
@@ -959,4 +981,187 @@ void init_shell() {
     printf("\n");
     print_prompt();
     editor::init_editor();
+}
+
+void cmd_sched_policy(const char* args) {
+    auto& scheduler = kernel::Scheduler::instance();
+    auto& pm = kernel::ProcessManager::instance();
+    pid_t pid = pm.create_process("sched_policy", shell_pid);
+
+    if (args && *args) {
+        if (strcmp(args, "rr") == 0) {
+            scheduler.initialize(kernel::SchedulerPolicy::RoundRobin);
+            printf("Scheduler policy set to Round Robin\n");
+        } else if (strcmp(args, "priority") == 0) {
+            scheduler.initialize(kernel::SchedulerPolicy::Priority);
+            printf("Scheduler policy set to Priority-based\n");
+        } else
+            printf("Unknown scheduler policy. Available policies: rr, priority\n");
+    } else {
+        auto policy = scheduler.get_policy();
+
+        printf("Current scheduler policy: ");
+        if (policy == kernel::SchedulerPolicy::RoundRobin)
+            printf("Round Robin\n");
+        else if (policy == kernel::SchedulerPolicy::Priority)
+            printf("Priority-based\n");
+    }
+
+    pm.terminate_process(pid);
+}
+
+int parse_int(const char* str) {
+    int result = 0;
+    bool negative = false;
+
+    while (*str == ' ' || *str == '\t') {
+        str++;
+    }
+
+    if (*str == '-') {
+        negative = true;
+        str++;
+    }
+
+    while (*str >= '0' && *str <= '9') {
+        result = result * 10 + (*str - '0');
+        str++;
+    }
+
+    return negative ? -result : result;
+}
+
+void cmd_priority(const char* args) {
+    auto& scheduler = kernel::Scheduler::instance();
+    auto& pm = kernel::ProcessManager::instance();
+    pid_t pid = pm.create_process("priority", shell_pid);
+
+    if (args && *args) {
+        int target_pid = -1;
+        int priority = -1;
+
+        const char* ptr = args;
+        while (*ptr && (*ptr < '0' || *ptr > '9')) {
+            ptr++;
+        }
+
+        if (*ptr) {
+            target_pid = parse_int(ptr);
+
+            while (*ptr && *ptr >= '0' && *ptr <= '9') {
+                ptr++;
+            }
+
+            while (*ptr && (*ptr == ' ' || *ptr == '\t')) {
+                ptr++;
+            }
+
+            if (*ptr) priority = parse_int(ptr);
+        }
+
+        if (target_pid >= 1 && priority >= 0 && priority <= 10) {
+            scheduler.set_process_priority(target_pid, priority);
+            printf("Set priority of process %d to %d\n", target_pid, priority);
+        } else {
+            printf("Usage: priority <pid> <level>\n");
+            printf("  pid   - Process ID (1 or greater)\n");
+            printf("  level - Priority level (0-10, higher is more important)\n");
+        }
+    } else {
+        printf("Usage: priority <pid> <level>\n");
+        printf("  pid   - Process ID (1 or greater)\n");
+        printf("  level - Priority level (0-10, higher is more important)\n");
+    }
+
+    pm.terminate_process(pid);
+}
+
+void cmd_ipc_test() {
+    auto& pm = kernel::ProcessManager::instance();
+    pid_t test_pid = pm.create_process("ipc_test", shell_pid);
+    auto& ipc = kernel::IPCManager::instance();
+
+    char queue_name[64];
+    snprintf(queue_name, sizeof(queue_name), "test_queue_%d_%lu", test_pid, get_ticks());
+
+    int32_t queue_id = ipc.create_message_queue(test_pid, queue_name);
+    if (queue_id < 0) {
+        printf("Failed to create message queue\n");
+        pm.terminate_process(test_pid);
+        return;
+    }
+
+    printf("Created message queue with ID: %d\n", queue_id);
+
+    const char* message = "Hello from IPC test!";
+    if (!ipc.send_message(queue_id, test_pid, message, strlen(message) + 1)) {
+        printf("Failed to send message\n");
+        ipc.destroy_message_queue(queue_id);
+        pm.terminate_process(test_pid);
+        return;
+    }
+
+    printf("Sent message: \"%s\"\n", message);
+
+    struct {
+        pid_t sender;
+        uint64_t timestamp;
+        size_t size;
+        uint8_t data[1024];
+    } received_msg;
+
+    if (!ipc.receive_message(queue_id, *reinterpret_cast<kernel::IPCMessage*>(&received_msg),
+                             false)) {
+        printf("Failed to receive message\n");
+        ipc.destroy_message_queue(queue_id);
+        pm.terminate_process(test_pid);
+        return;
+    }
+
+    printf("Received message from PID %d: \"%s\"\n", received_msg.sender, received_msg.data);
+
+    int32_t shm_id = ipc.create_shared_memory(test_pid, 4096);
+    if (shm_id < 0) {
+        printf("Failed to create shared memory\n");
+        ipc.destroy_message_queue(queue_id);
+        pm.terminate_process(test_pid);
+        return;
+    }
+
+    printf("Created shared memory with ID: %d\n", shm_id);
+
+    void* shm_addr = ipc.attach_shared_memory(shm_id, test_pid);
+    if (!shm_addr) {
+        printf("Failed to attach shared memory\n");
+        ipc.destroy_shared_memory(shm_id);
+        ipc.destroy_message_queue(queue_id);
+        pm.terminate_process(test_pid);
+        return;
+    }
+
+    printf("Attached shared memory at address: 0x%llx\n", reinterpret_cast<uint64_t>(shm_addr));
+
+    const char* shm_message = "Hello from shared memory!";
+    memcpy(shm_addr, shm_message, strlen(shm_message) + 1);
+
+    printf("Wrote to shared memory: \"%s\"\n", shm_message);
+    printf("Read from shared memory: \"%s\"\n", static_cast<char*>(shm_addr));
+
+    if (!ipc.detach_shared_memory(shm_id, test_pid))
+        printf("Failed to detach shared memory\n");
+    else
+        printf("Detached shared memory\n");
+
+    if (!ipc.destroy_shared_memory(shm_id))
+        printf("Failed to destroy shared memory\n");
+    else
+        printf("Destroyed shared memory\n");
+
+    if (!ipc.destroy_message_queue(queue_id))
+        printf("Failed to destroy message queue\n");
+    else
+        printf("Destroyed message queue\n");
+
+    printf("IPC test completed successfully!\n");
+    pm.terminate_process(test_pid);
 }

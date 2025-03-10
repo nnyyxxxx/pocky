@@ -23,6 +23,20 @@ enum class SyscallNumber : uint64_t {
     Exit = 60,
     Fork = 57,
     Execve = 59,
+
+    MsgCreate = 100,
+    MsgDestroy = 101,
+    MsgOpen = 102,
+    MsgSend = 103,
+    MsgReceive = 104,
+    ShmCreate = 105,
+    ShmDestroy = 106,
+    ShmAttach = 107,
+    ShmDetach = 108,
+
+    SchedYield = 120,
+    SchedSetPriority = 121,
+    SchedGetPriority = 122,
 };
 
 struct SyscallContext {
@@ -57,6 +71,21 @@ private:
     static int64_t sys_stat(const char* path, struct stat* statbuf);
     static int64_t sys_fstat(int fd, struct stat* statbuf);
     static int64_t sys_lstat(const char* path, struct stat* statbuf);
+
+    static int32_t sys_msg_create(const char* name);
+    static int64_t sys_msg_destroy(int32_t id);
+    static int32_t sys_msg_open(const char* name);
+    static int64_t sys_msg_send(int32_t queue_id, const void* data, size_t size);
+    static int64_t sys_msg_receive(int32_t queue_id, void* data, size_t max_size, bool wait);
+
+    static int32_t sys_shm_create(size_t size);
+    static int64_t sys_shm_destroy(int32_t id);
+    static void* sys_shm_attach(int32_t id);
+    static int64_t sys_shm_detach(int32_t id);
+
+    static int64_t sys_sched_yield();
+    static int64_t sys_sched_set_priority(pid_t pid, uint8_t priority);
+    static int64_t sys_sched_get_priority(pid_t pid);
 };
 
 }
