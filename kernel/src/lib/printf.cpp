@@ -6,7 +6,7 @@ extern "C" {
 
 constexpr size_t PRINT_BUFFER_SIZE = 32;
 
-void print_number(int num, int base, int width, bool pad_zero) {
+void print_number(int num, int base, int width, bool pad_zero, bool left_justify) {
     bool negative = num < 0;
     if (negative) num = -num;
 
@@ -23,19 +23,31 @@ void print_number(int num, int base, int width, bool pad_zero) {
         }
     }
 
-    int padding = width - i - (negative ? 1 : 0);
-    if (pad_zero && negative) terminal_putchar('-');
+    int content_width = i + (negative ? 1 : 0);
+    int padding = width - content_width;
 
-    while (padding-- > 0)
-        terminal_putchar(pad_zero ? '0' : ' ');
+    if (left_justify) {
+        if (negative) terminal_putchar('-');
 
-    if (!pad_zero && negative) terminal_putchar('-');
+        while (i-- > 0)
+            terminal_putchar(buffer[i]);
 
-    while (i-- > 0)
-        terminal_putchar(buffer[i]);
+        while (padding-- > 0)
+            terminal_putchar(' ');
+    } else {
+        if (pad_zero && negative) terminal_putchar('-');
+
+        while (padding-- > 0)
+            terminal_putchar(pad_zero ? '0' : ' ');
+
+        if (!pad_zero && negative) terminal_putchar('-');
+
+        while (i-- > 0)
+            terminal_putchar(buffer[i]);
+    }
 }
 
-void print_unsigned(unsigned long long num, int base, int width, bool pad_zero) {
+void print_unsigned(unsigned long long num, int base, int width, bool pad_zero, bool left_justify) {
     char buffer[PRINT_BUFFER_SIZE] = {0};
     size_t i = 0;
 
@@ -43,21 +55,30 @@ void print_unsigned(unsigned long long num, int base, int width, bool pad_zero) 
         buffer[i++] = '0';
     else {
         while (num > 0 && i < PRINT_BUFFER_SIZE - 1) {
-            unsigned long long digit = num % base;
+            unsigned int digit = num % base;
             buffer[i++] = digit < 10 ? '0' + digit : 'a' + digit - 10;
             num /= base;
         }
     }
 
     int padding = width - i;
-    while (padding-- > 0)
-        terminal_putchar(pad_zero ? '0' : ' ');
 
-    while (i-- > 0)
-        terminal_putchar(buffer[i]);
+    if (left_justify) {
+        while (i-- > 0)
+            terminal_putchar(buffer[i]);
+
+        while (padding-- > 0)
+            terminal_putchar(' ');
+    } else {
+        while (padding-- > 0)
+            terminal_putchar(pad_zero ? '0' : ' ');
+
+        while (i-- > 0)
+            terminal_putchar(buffer[i]);
+    }
 }
 
-void print_hex(unsigned long long num, int width, bool pad_zero) {
+void print_hex(unsigned long long num, int width, bool pad_zero, bool left_justify) {
     char buffer[PRINT_BUFFER_SIZE] = {0};
     size_t i = 0;
 
@@ -65,19 +86,29 @@ void print_hex(unsigned long long num, int width, bool pad_zero) {
         buffer[i++] = '0';
     else {
         while (num > 0 && i < PRINT_BUFFER_SIZE - 1) {
-            int digit = num % 16;
+            unsigned int digit = num & 0xF;
             buffer[i++] = digit < 10 ? '0' + digit : 'a' + digit - 10;
-            num /= 16;
+            num >>= 4;
         }
     }
 
-    printf("0x");
-    int padding = width - i;
-    while (padding-- > 0)
-        terminal_putchar(pad_zero ? '0' : ' ');
+    int padding = width - i - 2;
 
-    while (i-- > 0)
-        terminal_putchar(buffer[i]);
+    if (left_justify) {
+        printf("0x");
+        while (i-- > 0)
+            terminal_putchar(buffer[i]);
+
+        while (padding-- > 0)
+            terminal_putchar(' ');
+    } else {
+        while (padding-- > 0)
+            terminal_putchar(pad_zero ? '0' : ' ');
+
+        printf("0x");
+        while (i-- > 0)
+            terminal_putchar(buffer[i]);
+    }
 }
 
 void print_pointer(const void* ptr) {
@@ -113,7 +144,13 @@ int vprintf(const char* format, va_list args) {
 
             int width = 0;
             bool pad_zero = false;
+            bool left_justify = false;
             int precision = -1;
+
+            if (*format == '-') {
+                left_justify = true;
+                format++;
+            }
 
             if (*format == '0') {
                 pad_zero = true;
@@ -160,29 +197,32 @@ int vprintf(const char* format, va_list args) {
                 }
                 case 'd':
                     if (is_size_t)
-                        print_unsigned(va_arg(args, size_t), 10, width, pad_zero);
+                        print_unsigned(va_arg(args, size_t), 10, width, pad_zero, left_justify);
                     else if (is_long_long)
-                        print_number(va_arg(args, long long), 10, width, pad_zero);
+                        print_number(va_arg(args, long long), 10, width, pad_zero, left_justify);
                     else if (is_long)
-                        print_number(va_arg(args, long), 10, width, pad_zero);
+                        print_number(va_arg(args, long), 10, width, pad_zero, left_justify);
                     else
-                        print_number(va_arg(args, int), 10, width, pad_zero);
+                        print_number(va_arg(args, int), 10, width, pad_zero, left_justify);
                     break;
                 case 'u':
                     if (is_size_t || is_long_long)
-                        print_unsigned(va_arg(args, unsigned long long), 10, width, pad_zero);
+                        print_unsigned(va_arg(args, unsigned long long), 10, width, pad_zero,
+                                       left_justify);
                     else if (is_long)
-                        print_unsigned(va_arg(args, unsigned long), 10, width, pad_zero);
+                        print_unsigned(va_arg(args, unsigned long), 10, width, pad_zero,
+                                       left_justify);
                     else
-                        print_unsigned(va_arg(args, unsigned int), 10, width, pad_zero);
+                        print_unsigned(va_arg(args, unsigned int), 10, width, pad_zero,
+                                       left_justify);
                     break;
                 case 'x':
                     if (is_size_t || is_long_long)
-                        print_hex(va_arg(args, unsigned long long), width, pad_zero);
+                        print_hex(va_arg(args, unsigned long long), width, pad_zero, left_justify);
                     else if (is_long)
-                        print_hex(va_arg(args, unsigned long), width, pad_zero);
+                        print_hex(va_arg(args, unsigned long), width, pad_zero, left_justify);
                     else
-                        print_hex(va_arg(args, unsigned int), width, pad_zero);
+                        print_hex(va_arg(args, unsigned int), width, pad_zero, left_justify);
                     break;
                 case 'p':
                     print_pointer(va_arg(args, void*));
@@ -190,7 +230,28 @@ int vprintf(const char* format, va_list args) {
                 case 's': {
                     const char* str = va_arg(args, const char*);
                     if (!str) str = "(null)";
-                    printf(str);
+
+                    if (width > 0) {
+                        size_t len = 0;
+                        const char* s = str;
+                        while (*s) {
+                            len++;
+                            s++;
+                        }
+
+                        if (left_justify) {
+                            printf(str);
+                            int padding = width - len;
+                            while (padding-- > 0)
+                                terminal_putchar(' ');
+                        } else {
+                            int padding = width - len;
+                            while (padding-- > 0)
+                                terminal_putchar(' ');
+                            printf(str);
+                        }
+                    } else
+                        printf(str);
                     break;
                 }
                 case '%':

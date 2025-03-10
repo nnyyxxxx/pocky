@@ -38,6 +38,8 @@ public:
     bool save_user_data();
     bool load_user_data();
 
+    void list_users(void (*callback)(const char* username, uint32_t uid, uint32_t gid)) const;
+
 private:
     CUserManager();
     ~CUserManager() = default;

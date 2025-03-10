@@ -200,4 +200,13 @@ bool CUserManager::create_home_directory(const char* username) {
     return true;
 }
 
+void CUserManager::list_users(void (*callback)(const char* username, uint32_t uid,
+                                               uint32_t gid)) const {
+    if (!callback) return;
+
+    for (size_t i = 0; i < m_user_count; ++i) {
+        if (m_users[i].active) callback(m_users[i].username, m_users[i].uid, m_users[i].gid);
+    }
+}
+
 }  // namespace fs

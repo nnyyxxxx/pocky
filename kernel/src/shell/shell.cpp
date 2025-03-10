@@ -153,9 +153,10 @@ void cmd_help() {
                             "  pkill    - Kill a process\n"
                             "  ipctest  - Run IPC test\n"
                             "  useradd  - Add a new user\n"
-                            "  userremove - Remove a user\n"
+                            "  userrm   - Remove a user\n"
                             "  su       - Switch to a different user\n"
-                            "  whoami   - Show current user\n";
+                            "  whoami   - Show current user\n"
+                            "  userlist - List user accounts\n";
 
     pager::show_text(help_text);
 
@@ -1003,12 +1004,14 @@ void process_command() {
         cmd_ipc_test();
     else if (strcmp(cmd, "useradd") == 0)
         cmd_useradd(args);
-    else if (strcmp(cmd, "userremove") == 0)
-        cmd_userremove(args);
+    else if (strcmp(cmd, "userrm") == 0)
+        cmd_userrm(args);
     else if (strcmp(cmd, "su") == 0)
         cmd_su(args);
     else if (strcmp(cmd, "whoami") == 0)
         cmd_whoami();
+    else if (strcmp(cmd, "userlist") == 0)
+        cmd_userlist();
     else {
         set_red();
         printf("Unknown command: %s\n", cmd);
@@ -1174,10 +1177,10 @@ void cmd_useradd(const char* args) {
         printf("Failed to create user '%s'\n", username);
 }
 
-void cmd_userremove(const char* args) {
+void cmd_userrm(const char* args) {
     if (!args || args[0] == '\0') {
-        printf("userremove: missing username\n");
-        printf("Usage: userremove <username>\n");
+        printf("userrm: missing username\n");
+        printf("Usage: userrm <username>\n");
         return;
     }
 
@@ -1236,4 +1239,19 @@ void cmd_su(const char* args) {
 void cmd_whoami() {
     auto& user_manager = fs::CUserManager::instance();
     printf("%s\n", user_manager.get_current_username());
+}
+
+void cmd_userlist() {
+    auto& pm = kernel::ProcessManager::instance();
+    pid_t pid = pm.create_process("userlist", shell_pid);
+
+    printf("User accounts:\n\n");
+
+    auto& user_manager = fs::CUserManager::instance();
+
+    user_manager.list_users([](const char* username, uint32_t uid, uint32_t gid) {
+        printf("  Username: %-10s UID: %-5d GID: %-5d\n", username, uid, gid);
+    });
+
+    pm.terminate_process(pid);
 }
