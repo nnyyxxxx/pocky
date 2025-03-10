@@ -1,6 +1,6 @@
 <div align="center">
 
-# Kernel
+# Pocky
 
 ![](.github/kernel.png)
 
