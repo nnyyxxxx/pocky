@@ -24,6 +24,32 @@
 #include "timer.hpp"
 #include "vga.hpp"
 
+uint8_t saved_terminal_color = 0;
+
+void set_red() {
+    saved_terminal_color = terminal_color;
+    terminal_color = vga_color(VGA_COLOR_RED, VGA_COLOR_BLACK);
+}
+
+void set_green() {
+    saved_terminal_color = terminal_color;
+    terminal_color = vga_color(VGA_COLOR_GREEN, VGA_COLOR_BLACK);
+}
+
+void set_gray() {
+    saved_terminal_color = terminal_color;
+    terminal_color = vga_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK);
+}
+
+void set_white() {
+    saved_terminal_color = terminal_color;
+    terminal_color = vga_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK);
+}
+
+void reset_color() {
+    terminal_color = saved_terminal_color;
+}
+
 char input_buffer[256] = {0};
 size_t input_pos = 0;
 pid_t shell_pid = 0;
@@ -180,7 +206,9 @@ void cmd_memory() {
     size_t total_frames = pmm.get_total_frames();
 
     if (total_frames == 0 || free_frames > total_frames) {
+        set_red();
         printf("Error: Invalid memory state\n");
+        reset_color();
         pm.terminate_process(pid);
         return;
     }
@@ -189,7 +217,9 @@ void cmd_memory() {
 
     constexpr size_t max_size = static_cast<size_t>(-1);
     if (total_frames > max_size / PhysicalMemoryManager::PAGE_SIZE) {
+        set_red();
         printf("Error: Memory size too large to represent\n");
+        reset_color();
         pm.terminate_process(pid);
         return;
     }
@@ -337,7 +367,9 @@ void cmd_cp(const char* args) {
     split_path(args, src, dst);
 
     if (!*src || !*dst) {
+        set_red();
         printf("cp: missing operand\n");
+        reset_color();
         pm.terminate_process(pid);
         return;
     }
@@ -354,14 +386,16 @@ void cmd_cp(const char* args) {
 
             auto dst_node = fs.create_file(full_dst, fs::FileType::Regular);
             if (!dst_node) {
-                printf("cp: cannot create '");
-                printf(full_dst);
-                printf("'\n");
+                set_red();
+                printf("cp: cannot create '%s'\n", full_dst);
+                reset_color();
                 return;
             }
 
             if (!fs.write_file(full_dst, src_node->data, src_node->size)) {
+                set_red();
                 printf("cp: write error\n");
+                reset_color();
                 fs.delete_file(full_dst);
             }
         });
@@ -372,24 +406,26 @@ void cmd_cp(const char* args) {
     auto& fs = fs::FileSystem::instance();
     auto src_node = fs.get_file(src);
     if (!src_node || src_node->type != fs::FileType::Regular) {
-        printf("cp: cannot read '");
-        printf(src);
-        printf("'\n");
+        set_red();
+        printf("cp: cannot read '%s'\n", src);
+        reset_color();
         pm.terminate_process(pid);
         return;
     }
 
     auto dst_node = fs.create_file(dst, fs::FileType::Regular);
     if (!dst_node) {
-        printf("cp: cannot create '");
-        printf(dst);
-        printf("'\n");
+        set_red();
+        printf("cp: cannot create '%s'\n", dst);
+        reset_color();
         pm.terminate_process(pid);
         return;
     }
 
     if (!fs.write_file(dst, src_node->data, src_node->size)) {
+        set_red();
         printf("cp: write error\n");
+        reset_color();
         fs.delete_file(dst);
     }
 
@@ -749,17 +785,28 @@ void handle_redirection(const char* command) {
 void print_prompt() {
     auto& fs = fs::FileSystem::instance();
 
-    const char* full_path = fs.get_current_path();
-
-    const char* dir_name = full_path;
-    if (strcmp(full_path, "/") == 0)
-        dir_name = "/";
-    else {
-        const char* last_slash = strrchr(full_path, '/');
+    const char* path = fs.get_current_path();
+    const char* dir_name = path;
+    if (strcmp(path, "/") != 0) {
+        const char* last_slash = strrchr(path, '/');
         if (last_slash && *(last_slash + 1) != '\0') dir_name = last_slash + 1;
     }
 
-    printf("[root@pocky %s]$ ", dir_name);
+    set_white();
+    printf("[");
+    set_red();
+    printf("root@pocky");
+    reset_color();
+    printf(" ");
+    set_gray();
+    printf("%s", dir_name);
+    reset_color();
+    set_white();
+    printf("]");
+    set_green();
+    printf("$");
+    reset_color();
+    printf(" ");
 }
 
 void handle_tab_completion() {
@@ -933,9 +980,11 @@ void process_command() {
     else if (strcmp(cmd, "ipctest") == 0)
         cmd_ipc_test();
     else {
+        set_red();
         printf("Unknown command: ");
         printf(cmd);
         printf("\n");
+        reset_color();
     }
 
     memset(input_buffer, 0, sizeof(input_buffer));
