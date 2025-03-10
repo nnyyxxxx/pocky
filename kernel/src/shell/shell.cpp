@@ -118,7 +118,6 @@ void cmd_help() {
                                    "  time     - Show current UTC time\n"
                                    "  shutdown - Power off the system\n"
                                    "  graphics - Enter graphics mode\n"
-                                   "  count    - Count from 0 to idk\n"
                                    "  ps       - List running processes\n"
                                    "  pkill    - Kill a process\n"
                                    "  ipctest  - Run IPC test\n";
@@ -653,22 +652,6 @@ void cmd_pkill(const char* args) {
     pm.terminate_process(pid);
 }
 
-void cmd_count() {
-    auto& pm = kernel::ProcessManager::instance();
-    pid_t pid = pm.create_process("count", shell_pid);
-    size_t count = 0;
-
-    kernel::Process* process = pm.get_process(pid);
-    while (process && process->state == kernel::ProcessState::Running) {
-        printf("Count: %zu\n", count++);
-        for (volatile size_t i = 0; i < 100000000; i++)
-            ;
-        process = pm.get_process(pid);
-    }
-
-    pm.terminate_process(pid);
-}
-
 void cmd_less(const char* path) {
     auto& pm = kernel::ProcessManager::instance();
     pid_t pid = pm.create_process("less", shell_pid);
@@ -933,8 +916,6 @@ void process_command() {
         cmd_ps();
     else if (strcmp(cmd, "pkill") == 0)
         cmd_pkill(args);
-    else if (strcmp(cmd, "count") == 0)
-        cmd_count();
     else if (strcmp(cmd, "time") == 0)
         cmd_time();
     else if (strcmp(cmd, "less") == 0)

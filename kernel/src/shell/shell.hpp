@@ -34,7 +34,6 @@ void cmd_history();
 void cmd_uptime();
 void cmd_edit(const char* path);
 void cmd_graphics();
-void cmd_count();
 void cmd_ps();
 void cmd_pkill(const char* args);
 void cmd_time();
