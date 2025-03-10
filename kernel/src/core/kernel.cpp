@@ -147,8 +147,6 @@ extern "C" void kernel_main() {
     kernel::DynamicLinker::initialize();
 
     terminal_initialize();
-    printf("Welcome to the Kernel!\n");
-    printf("Type 'help' to see the list of available commands.\n");
 
     graphics_initialize();
 
