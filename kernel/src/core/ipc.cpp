@@ -48,15 +48,18 @@ bool MessageQueue::send_message(pid_t sender, const void* data, size_t size) {
     if (m_waiting_processes.size() > 0) {
         Process* waiting_process = m_waiting_processes[0];
 
-        for (size_t i = 0; i < m_waiting_processes.size() - 1; i++) {
-            m_waiting_processes[i] = m_waiting_processes[i + 1];
+        if (waiting_process && waiting_process->state == ProcessState::Waiting &&
+            waiting_process->waiting_on == this) {
+            for (size_t i = 0; i < m_waiting_processes.size() - 1; i++) {
+                m_waiting_processes[i] = m_waiting_processes[i + 1];
+            }
+            m_waiting_processes.pop_back();
+
+            waiting_process->state = ProcessState::Ready;
+            waiting_process->waiting_on = nullptr;
+
+            Scheduler::instance().add_process(waiting_process);
         }
-        m_waiting_processes.pop_back();
-
-        waiting_process->state = ProcessState::Ready;
-        waiting_process->waiting_on = nullptr;
-
-        Scheduler::instance().add_process(waiting_process);
     }
 
     return true;
@@ -79,6 +82,8 @@ bool MessageQueue::receive_message(IPCMessage& message, bool wait) {
 
         if (m_messages.size() == 0) return false;
     }
+
+    if (m_messages.size() == 0) return false;
 
     message = m_messages[0];
 

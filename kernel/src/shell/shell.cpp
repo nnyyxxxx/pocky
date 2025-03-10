@@ -351,9 +351,7 @@ void cmd_cp(const char* args) {
 
             char full_dst[fs::MAX_PATH];
             strcpy(full_dst, dst);
-            if (dst[strlen(dst) - 1] == '/') {
-                strcat(full_dst, matched_path);
-            }
+            if (dst[strlen(dst) - 1] == '/') strcat(full_dst, matched_path);
 
             auto dst_node = fs.create_file(full_dst, fs::FileType::Regular);
             if (!dst_node) {
@@ -421,9 +419,7 @@ void cmd_mv(const char* args) {
 
             char full_dst[fs::MAX_PATH];
             strcpy(full_dst, dst);
-            if (dst[strlen(dst) - 1] == '/') {
-                strcat(full_dst, matched_path);
-            }
+            if (dst[strlen(dst) - 1] == '/') strcat(full_dst, matched_path);
 
             if (src_node->type == fs::FileType::Regular) {
                 auto dst_node = fs.create_file(full_dst, fs::FileType::Regular);
@@ -573,15 +569,13 @@ void cmd_time() {
 }
 
 void cmd_graphics() {
-    auto& pm = kernel::ProcessManager::instance();
-    pid_t pid = pm.create_process("graphics", shell_pid);
-
     for (volatile int i = 0; i < 1000000; i++)
         ;
 
     enter_graphics_mode();
 
-    pm.terminate_process(pid);
+    // never reached
+    in_graphics_mode = false;
 }
 
 void cmd_ps() {

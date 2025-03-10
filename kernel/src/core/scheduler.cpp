@@ -69,12 +69,18 @@ void Scheduler::schedule() {
 }
 
 void Scheduler::tick() {
+    uint64_t flags;
+    __asm__ volatile("pushfq; pop %0" : "=r"(flags));
+    if (!(flags & (1 << 9))) return;
+
     auto& pm = ProcessManager::instance();
     Process* current = pm.get_current_process();
 
     if (!current) return;
 
     current->total_runtime++;
+
+    if (current->priority >= 9) return;
 
     if (m_current_time_slice > 0) m_current_time_slice--;
 

@@ -2,6 +2,8 @@
 
 #include <cstring>
 
+#include "core/process.hpp"
+#include "core/scheduler.hpp"
 #include "io.hpp"
 #include "keyboard.hpp"
 #include "mouse.hpp"
@@ -365,37 +367,73 @@ void enter_graphics_mode() {
     cursor_x = -1;
     cursor_y = -1;
 
-    MouseState mouse = get_mouse_state();
-    render_mouse_cursor(mouse.x, mouse.y);
+    auto& scheduler = kernel::Scheduler::instance();
+    kernel::Process* current_process = kernel::ProcessManager::instance().get_current_process();
+    if (current_process) scheduler.set_process_priority(current_process->pid, 10);
 
-    MouseState lastMouseState = mouse;
+    MouseState lastMouseState = get_mouse_state();
+    render_mouse_cursor(lastMouseState.x, lastMouseState.y);
+
     RTCTime lastTime = time;
+
+    __asm__ volatile("sti");
 
     while (true) {
         if ((inb(KEYBOARD_STATUS_PORT) & STATUS_OUTPUT_BUFFER_FULL) != 0) {
-            if ((inb(KEYBOARD_STATUS_PORT) & STATUS_MOUSE_DATA) != 0) inb(KEYBOARD_DATA_PORT);
+            if (!(inb(KEYBOARD_STATUS_PORT) & STATUS_MOUSE_DATA)) {
+                uint8_t scancode = inb(KEYBOARD_DATA_PORT);
+                if (scancode == 1) break;
+            } else
+                inb(KEYBOARD_DATA_PORT);
         }
 
-        MouseState mouse = get_mouse_state();
-        if (mouse.x != lastMouseState.x || mouse.y != lastMouseState.y ||
-            mouse.left_button != lastMouseState.left_button ||
-            mouse.right_button != lastMouseState.right_button ||
-            mouse.middle_button != lastMouseState.middle_button) {
-            render_mouse_cursor(mouse.x, mouse.y);
+        MouseState currentMouse = get_mouse_state();
 
-            lastMouseState = mouse;
+        if (currentMouse.x != lastMouseState.x || currentMouse.y != lastMouseState.y ||
+            currentMouse.left_button != lastMouseState.left_button ||
+            currentMouse.right_button != lastMouseState.right_button ||
+            currentMouse.middle_button != lastMouseState.middle_button) {
+            if (currentMouse.x != lastMouseState.x || currentMouse.y != lastMouseState.y) {
+                if (cursor_x != -1 && cursor_y != -1) restore_cursor_background(cursor_x, cursor_y);
+
+                save_cursor_background(currentMouse.x, currentMouse.y);
+
+                for (int i = 0; i < 16; i++) {
+                    for (int j = 0; j < 16; j++) {
+                        if (cursor_bitmap[i][j] != 0 && currentMouse.x + j >= 0 &&
+                            currentMouse.y + i >= 0 && currentMouse.x + j < GRAPHICS_WIDTH &&
+                            currentMouse.y + i < GRAPHICS_HEIGHT) {
+                            vga_framebuffer[(currentMouse.y + i) * GRAPHICS_WIDTH +
+                                            (currentMouse.x + j)] = cursor_bitmap[i][j];
+                        }
+                    }
+                }
+
+                cursor_x = currentMouse.x;
+                cursor_y = currentMouse.y;
+            }
+
+            lastMouseState = currentMouse;
         }
 
         RTCTime current_time = get_rtc_time();
         if (current_time.seconds != lastTime.seconds) {
             draw_status_bar();
-
             update_status_bar_time(current_time);
-
             lastTime = current_time;
         }
 
-        for (volatile int i = 0; i < 1000; i++)
+        for (volatile int i = 0; i < 500; i++)
             ;
+
+        __asm__ volatile("sti; hlt");
     }
+
+    __asm__ volatile("cli");
+    terminal_initialize();
+    __asm__ volatile("sti");
+
+    in_graphics_mode = false;
+
+    if (current_process) scheduler.set_process_priority(current_process->pid, 5);
 }
