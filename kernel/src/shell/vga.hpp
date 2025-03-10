@@ -22,3 +22,5 @@ uint16_t vga_entry(char c, uint8_t color);
 void update_cursor();
 void update_cursor_position(size_t x, size_t y);
 void cursor_initialize();
+void hide_cursor();
+void show_cursor();

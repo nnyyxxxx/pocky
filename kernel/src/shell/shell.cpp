@@ -10,11 +10,13 @@
 #include "drivers/keyboard.hpp"
 #include "editor.hpp"
 #include "fs/filesystem.hpp"
+#include "fs/users.hpp"
 #include "graphics.hpp"
 #include "io.hpp"
 #include "lib/lib.hpp"
 #include "lib/string.hpp"
 #include "lib/vector.hpp"
+#include "memory/heap.hpp"
 #include "pager.hpp"
 #include "physical_memory.hpp"
 #include "printf.hpp"
@@ -34,6 +36,11 @@ void set_red() {
 void set_green() {
     saved_terminal_color = terminal_color;
     terminal_color = vga_color(VGA_COLOR_GREEN, VGA_COLOR_BLACK);
+}
+
+void set_blue() {
+    saved_terminal_color = terminal_color;
+    terminal_color = vga_color(VGA_COLOR_BLUE, VGA_COLOR_BLACK);
 }
 
 void set_gray() {
@@ -122,31 +129,33 @@ void handle_wildcard_command(const char* pattern, F cmd_fn) {
 void cmd_help() {
     auto& pm = kernel::ProcessManager::instance();
     pid_t pid = pm.create_process("help", shell_pid);
-
-    static const char* help_text = "Available commands:\n"
-                                   "  help     - Show this help message\n"
-                                   "  echo     - Echo the arguments\n"
-                                   "  clear    - Clear the screen\n"
-                                   "  crash    - Trigger a crash (for testing)\n"
-                                   "  memory   - Show memory usage\n"
-                                   "  ls       - List directory contents\n"
-                                   "  mkdir    - Create a new directory\n"
-                                   "  cd       - Change current directory\n"
-                                   "  cat      - Display file contents\n"
-                                   "  less     - View file contents with paging\n"
-                                   "  cp       - Copy a file\n"
-                                   "  mv       - Move/rename a file\n"
-                                   "  rm       - Remove a file or directory\n"
-                                   "  touch    - Create an empty file\n"
-                                   "  edit     - Edit a file\n"
-                                   "  history  - Show command history\n"
-                                   "  uptime   - Show system uptime\n"
-                                   "  time     - Show current UTC time\n"
-                                   "  shutdown - Power off the system\n"
-                                   "  graphics - Enter graphics mode\n"
-                                   "  ps       - List running processes\n"
-                                   "  pkill    - Kill a process\n"
-                                   "  ipctest  - Run IPC test\n";
+    const char* help_text = "Available commands:\n\n"
+                            "  help     - Display this help message\n"
+                            "  echo     - Echo arguments\n"
+                            "  clear    - Clear the screen\n"
+                            "  crash    - Trigger a kernel panic (for testing)\n"
+                            "  shutdown - Power off the system\n"
+                            "  memory   - Display memory usage information\n"
+                            "  ls       - List directory contents\n"
+                            "  mkdir    - Create a new directory\n"
+                            "  cd       - Change current directory\n"
+                            "  cat      - Display file contents\n"
+                            "  cp       - Copy a file\n"
+                            "  mv       - Move or rename a file\n"
+                            "  rm       - Remove a file or directory\n"
+                            "  touch    - Create an empty file\n"
+                            "  edit     - Edit a file\n"
+                            "  history  - Display command history\n"
+                            "  uptime   - Display system uptime\n"
+                            "  time     - Display system time\n"
+                            "  graphics - Enter graphics mode\n"
+                            "  ps       - List running processes\n"
+                            "  pkill    - Kill a process\n"
+                            "  ipctest  - Run IPC test\n"
+                            "  useradd  - Add a new user\n"
+                            "  userremove - Remove a user\n"
+                            "  su       - Switch to a different user\n"
+                            "  whoami   - Show current user\n";
 
     pager::show_text(help_text);
 
@@ -784,19 +793,30 @@ void handle_redirection(const char* command) {
 
 void print_prompt() {
     auto& fs = fs::FileSystem::instance();
+    const char* current_path = fs.get_current_path();
+    char dir_name[256];
 
-    const char* path = fs.get_current_path();
-    const char* dir_name = path;
-    if (strcmp(path, "/") != 0) {
-        const char* last_slash = strrchr(path, '/');
-        if (last_slash && *(last_slash + 1) != '\0') dir_name = last_slash + 1;
+    if (strcmp(current_path, "/") == 0)
+        strcpy(dir_name, "/");
+    else {
+        const char* last_slash = strrchr(current_path, '/');
+        if (last_slash)
+            strcpy(dir_name, last_slash + 1);
+        else
+            strcpy(dir_name, current_path);
     }
+
+    auto& user_manager = fs::CUserManager::instance();
+    const char* username = user_manager.get_current_username();
 
     set_white();
     printf("[");
-    set_red();
-    printf("root@pocky");
-    reset_color();
+    set_green();
+    printf("%s", username);
+    set_white();
+    printf("@");
+    set_blue();
+    printf("kernel");
     printf(" ");
     set_gray();
     printf("%s", dir_name);
@@ -931,6 +951,8 @@ void process_command() {
         terminal_clear();
     else if (strcmp(cmd, "crash") == 0)
         cmd_crash();
+    else if (strcmp(cmd, "shutdown") == 0 || strcmp(cmd, "poweroff") == 0)
+        cmd_shutdown();
     else if (strcmp(cmd, "memory") == 0)
         cmd_memory();
     else if (strcmp(cmd, "ls") == 0)
@@ -979,11 +1001,17 @@ void process_command() {
         cmd_less(args);
     else if (strcmp(cmd, "ipctest") == 0)
         cmd_ipc_test();
+    else if (strcmp(cmd, "useradd") == 0)
+        cmd_useradd(args);
+    else if (strcmp(cmd, "userremove") == 0)
+        cmd_userremove(args);
+    else if (strcmp(cmd, "su") == 0)
+        cmd_su(args);
+    else if (strcmp(cmd, "whoami") == 0)
+        cmd_whoami();
     else {
         set_red();
-        printf("Unknown command: ");
-        printf(cmd);
-        printf("\n");
+        printf("Unknown command: %s\n", cmd);
         reset_color();
     }
 
@@ -1099,4 +1127,113 @@ void cmd_ipc_test() {
 
     printf("IPC test completed successfully!\n");
     pm.terminate_process(test_pid);
+}
+
+void cmd_useradd(const char* args) {
+    if (!args || args[0] == '\0') {
+        printf("useradd: missing arguments\n");
+        printf("Usage: useradd <username> <password>\n");
+        return;
+    }
+
+    char username[fs::MAX_USERNAME] = {0};
+    char password[fs::MAX_PASSWORD] = {0};
+
+    size_t arg_len = strlen(args);
+    size_t i = 0;
+
+    size_t username_len = 0;
+    while (i < arg_len && args[i] != ' ' && username_len < fs::MAX_USERNAME - 1) {
+        username[username_len++] = args[i++];
+    }
+    username[username_len] = '\0';
+
+    while (i < arg_len && args[i] == ' ')
+        i++;
+
+    size_t password_len = 0;
+    while (i < arg_len && password_len < fs::MAX_PASSWORD - 1) {
+        password[password_len++] = args[i++];
+    }
+    password[password_len] = '\0';
+
+    if (username_len == 0) {
+        printf("useradd: missing username\n");
+        return;
+    }
+
+    if (password_len == 0) {
+        printf("useradd: missing password\n");
+        return;
+    }
+
+    auto& user_manager = fs::CUserManager::instance();
+    if (user_manager.add_user(username, password))
+        printf("User '%s' created successfully\n", username);
+    else
+        printf("Failed to create user '%s'\n", username);
+}
+
+void cmd_userremove(const char* args) {
+    if (!args || args[0] == '\0') {
+        printf("userremove: missing username\n");
+        printf("Usage: userremove <username>\n");
+        return;
+    }
+
+    auto& user_manager = fs::CUserManager::instance();
+    if (user_manager.remove_user(args))
+        printf("User '%s' removed successfully\n", args);
+    else
+        printf("Failed to remove user '%s'\n", args);
+}
+
+void cmd_su(const char* args) {
+    if (!args || args[0] == '\0') {
+        printf("su: missing username\n");
+        printf("Usage: su <username> <password>\n");
+        return;
+    }
+
+    char username[fs::MAX_USERNAME] = {0};
+    char password[fs::MAX_PASSWORD] = {0};
+
+    size_t arg_len = strlen(args);
+    size_t i = 0;
+
+    size_t username_len = 0;
+    while (i < arg_len && args[i] != ' ' && username_len < fs::MAX_USERNAME - 1) {
+        username[username_len++] = args[i++];
+    }
+    username[username_len] = '\0';
+
+    while (i < arg_len && args[i] == ' ')
+        i++;
+
+    size_t password_len = 0;
+    while (i < arg_len && password_len < fs::MAX_PASSWORD - 1) {
+        password[password_len++] = args[i++];
+    }
+    password[password_len] = '\0';
+
+    if (username_len == 0) {
+        printf("su: missing username\n");
+        return;
+    }
+
+    if (password_len == 0) {
+        printf("su: missing password\n");
+        return;
+    }
+
+    auto& user_manager = fs::CUserManager::instance();
+    if (user_manager.switch_user(username, password))
+        printf("Switched to user '%s'\n", username);
+    else
+        printf("Authentication failed for user '%s'\n", username);
+}
+
+void cmd_whoami() {
+    auto& user_manager = fs::CUserManager::instance();
+    printf("%s\n", user_manager.get_current_username());
 }

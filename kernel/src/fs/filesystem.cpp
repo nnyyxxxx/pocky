@@ -1,9 +1,11 @@
 #include "filesystem.hpp"
 
+#include <cstdio>
 #include <cstring>
 
 #include "memory/heap.hpp"
 #include "physical_memory.hpp"
+#include "users.hpp"
 
 constexpr size_t PAGE_SIZE = 4096;
 
@@ -53,6 +55,10 @@ bool FileSystem::initialize() {
     FileNode* tmp_dir = create_file("tmp", FileType::Directory);
     if (!tmp_dir) return false;
 
+    FileNode* home_dir = create_file("home", FileType::Directory);
+    FileNode* etc_dir = create_file("etc", FileType::Directory);
+    if (!home_dir || !etc_dir) return false;
+
     const char* welcome_content = "welcome to the kernel :)";
     FileNode* welcome = create_file("tmp/welcome", FileType::Regular);
     if (welcome) {
@@ -78,6 +84,8 @@ bool FileSystem::initialize() {
             }
         }
     }
+
+    fs::CUserManager::instance().initialize();
 
     return true;
 }
@@ -107,8 +115,11 @@ FileNode* FileSystem::resolve_path(const char* path) {
         component[len] = '\0';
 
         if (strcmp(component, ".") == 0) {
+            //
             // stay in current directory
         } else if (strcmp(component, "..") == 0) {
+            //
+            // go to parent directory
             if (current->parent) current = current->parent;
         } else {
             FileNode* child = current->first_child;
@@ -160,9 +171,14 @@ FileNode* FileSystem::create_file(const char* path, FileType type) {
         parent_path[1] = '\0';
     } else {
         size_t len = filename - path;
-        if (len >= MAX_PATH) return nullptr;
-        strncpy(parent_path, path, len);
-        parent_path[len] = '\0';
+        if (len == 0) {
+            parent_path[0] = '/';
+            parent_path[1] = '\0';
+        } else {
+            if (len >= MAX_PATH) return nullptr;
+            strncpy(parent_path, path, len);
+            parent_path[len] = '\0';
+        }
         filename++;
     }
 

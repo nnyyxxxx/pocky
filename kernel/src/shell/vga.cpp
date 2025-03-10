@@ -40,3 +40,15 @@ void cursor_initialize() {
     outb(VGA_CTRL_PORT, 0x0B);
     outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xE0) | 15);
 }
+
+void hide_cursor() {
+    outb(VGA_CTRL_PORT, 0x0A);
+    outb(VGA_DATA_PORT, 0x20);
+
+    outb(VGA_CTRL_PORT, 0x0B);
+    outb(VGA_DATA_PORT, 0x00);
+}
+
+void show_cursor() {
+    cursor_initialize();
+}

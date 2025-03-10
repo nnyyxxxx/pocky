@@ -43,6 +43,8 @@ void display_current_page() {
     }
 
     terminal_color = old_color;
+
+    update_cursor_position(VGA_WIDTH - 1, VGA_HEIGHT - 1);
 }
 
 void split_text(const char* text) {
@@ -79,10 +81,14 @@ void init_pager() {
 void show_text(const char* text) {
     screen_state::save();
 
+    hide_cursor();
+
     split_text(text);
     current_line = 0;
     pager_active = true;
     display_current_page();
+
+    hide_cursor();
 }
 
 void process_keypress(char c) {
@@ -94,7 +100,7 @@ void process_keypress(char c) {
     switch (c) {
         case 'q':
             clear();
-            break;
+            return;
 
         case 'j':
         case '\x1B':
@@ -145,7 +151,10 @@ void process_keypress(char c) {
             break;
     }
 
-    if (should_update) display_current_page();
+    if (should_update) {
+        display_current_page();
+        hide_cursor();
+    }
 }
 
 bool is_active() {
@@ -155,6 +164,7 @@ bool is_active() {
 void clear() {
     pager_active = false;
     screen_state::restore();
+    show_cursor();
     print_prompt();
 }
 
