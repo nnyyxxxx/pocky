@@ -121,8 +121,6 @@ void cmd_help() {
                                    "  count    - Count from 0 to idk\n"
                                    "  ps       - List running processes\n"
                                    "  pkill    - Kill a process\n"
-                                   "  sched    - Get/set scheduler policy (rr, priority)\n"
-                                   "  priority - Set process priority (0-10)\n"
                                    "  ipctest  - Run IPC test\n";
 
     pager::show_text(help_text);
@@ -947,10 +945,6 @@ void process_command() {
         cmd_time();
     else if (strcmp(cmd, "less") == 0)
         cmd_less(args);
-    else if (strcmp(cmd, "sched") == 0)
-        cmd_sched_policy(args);
-    else if (strcmp(cmd, "priority") == 0)
-        cmd_priority(args);
     else if (strcmp(cmd, "ipctest") == 0)
         cmd_ipc_test();
     else {
@@ -981,99 +975,6 @@ void init_shell() {
     printf("\n");
     print_prompt();
     editor::init_editor();
-}
-
-void cmd_sched_policy(const char* args) {
-    auto& scheduler = kernel::Scheduler::instance();
-    auto& pm = kernel::ProcessManager::instance();
-    pid_t pid = pm.create_process("sched_policy", shell_pid);
-
-    if (args && *args) {
-        if (strcmp(args, "rr") == 0) {
-            scheduler.initialize(kernel::SchedulerPolicy::RoundRobin);
-            printf("Scheduler policy set to Round Robin\n");
-        } else if (strcmp(args, "priority") == 0) {
-            scheduler.initialize(kernel::SchedulerPolicy::Priority);
-            printf("Scheduler policy set to Priority-based\n");
-        } else
-            printf("Unknown scheduler policy. Available policies: rr, priority\n");
-    } else {
-        auto policy = scheduler.get_policy();
-
-        printf("Current scheduler policy: ");
-        if (policy == kernel::SchedulerPolicy::RoundRobin)
-            printf("Round Robin\n");
-        else if (policy == kernel::SchedulerPolicy::Priority)
-            printf("Priority-based\n");
-    }
-
-    pm.terminate_process(pid);
-}
-
-int parse_int(const char* str) {
-    int result = 0;
-    bool negative = false;
-
-    while (*str == ' ' || *str == '\t') {
-        str++;
-    }
-
-    if (*str == '-') {
-        negative = true;
-        str++;
-    }
-
-    while (*str >= '0' && *str <= '9') {
-        result = result * 10 + (*str - '0');
-        str++;
-    }
-
-    return negative ? -result : result;
-}
-
-void cmd_priority(const char* args) {
-    auto& scheduler = kernel::Scheduler::instance();
-    auto& pm = kernel::ProcessManager::instance();
-    pid_t pid = pm.create_process("priority", shell_pid);
-
-    if (args && *args) {
-        int target_pid = -1;
-        int priority = -1;
-
-        const char* ptr = args;
-        while (*ptr && (*ptr < '0' || *ptr > '9')) {
-            ptr++;
-        }
-
-        if (*ptr) {
-            target_pid = parse_int(ptr);
-
-            while (*ptr && *ptr >= '0' && *ptr <= '9') {
-                ptr++;
-            }
-
-            while (*ptr && (*ptr == ' ' || *ptr == '\t')) {
-                ptr++;
-            }
-
-            if (*ptr) priority = parse_int(ptr);
-        }
-
-        if (target_pid >= 1 && priority >= 0 && priority <= 10) {
-            scheduler.set_process_priority(target_pid, priority);
-            printf("Set priority of process %d to %d\n", target_pid, priority);
-        } else {
-            printf("Usage: priority <pid> <level>\n");
-            printf("  pid   - Process ID (1 or greater)\n");
-            printf("  level - Priority level (0-10, higher is more important)\n");
-        }
-    } else {
-        printf("Usage: priority <pid> <level>\n");
-        printf("  pid   - Process ID (1 or greater)\n");
-        printf("  level - Priority level (0-10, higher is more important)\n");
-    }
-
-    pm.terminate_process(pid);
 }
 
 void cmd_ipc_test() {
