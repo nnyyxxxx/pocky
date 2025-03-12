@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <atomic>
 
 #include "core/scheduler.hpp"
 #include "idt.hpp"
@@ -11,14 +12,13 @@
 
 namespace {
 
-volatile uint64_t timer_ticks = 0;
+static std::atomic<uint64_t> timer_ticks{0};
 uint32_t timer_frequency = 0;
 
 extern "C" void timer_handler();
 
 extern "C" void timer_callback() {
-    timer_ticks++;
-
+    timer_ticks.fetch_add(1, std::memory_order_relaxed);
     kernel::Scheduler::instance().tick();
 }
 
@@ -64,11 +64,11 @@ void init_timer(uint32_t frequency) {
 }
 
 uint64_t get_ticks() {
-    return timer_ticks;
+    return timer_ticks.load(std::memory_order_relaxed);
 }
 
 uint64_t get_uptime_seconds() {
-    return timer_ticks / timer_frequency;
+    return get_ticks() / timer_frequency;
 }
 
 void format_uptime(char* buffer, size_t size) {

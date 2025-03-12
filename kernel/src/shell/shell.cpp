@@ -614,8 +614,9 @@ void cmd_time() {
 }
 
 void cmd_graphics() {
-    for (volatile int i = 0; i < 1000000; i++)
-        ;
+    for (int i = 0; i < 1000000; i++) {
+        asm volatile("nop");
+    }
 
     enter_graphics_mode();
 

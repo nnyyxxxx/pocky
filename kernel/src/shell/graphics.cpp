@@ -423,8 +423,9 @@ void enter_graphics_mode() {
             lastTime = current_time;
         }
 
-        for (volatile int i = 0; i < 500; i++)
-            ;
+        for (int i = 0; i < 500; i++) {
+            asm volatile("nop" ::: "memory");
+        }
 
         __asm__ volatile("sti; hlt");
     }

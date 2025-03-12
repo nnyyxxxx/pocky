@@ -1,9 +1,11 @@
 #include "syscall.hpp"
-#include "process.hpp"
-#include "printf.hpp"
-#include "ipc.hpp"
-#include "scheduler.hpp"
+
 #include <cstring>
+
+#include "ipc.hpp"
+#include "printf.hpp"
+#include "process.hpp"
+#include "scheduler.hpp"
 
 namespace kernel {
 
@@ -24,14 +26,8 @@ int64_t SyscallHandler::handle(SyscallContext& ctx) {
             return sys_close(ctx.rdi);
 
         case SyscallNumber::Mmap:
-            return reinterpret_cast<int64_t>(sys_mmap(
-                reinterpret_cast<void*>(ctx.rdi),
-                ctx.rsi,
-                ctx.rdx,
-                ctx.r10,
-                ctx.r8,
-                ctx.r9
-            ));
+            return reinterpret_cast<int64_t>(sys_mmap(reinterpret_cast<void*>(ctx.rdi), ctx.rsi,
+                                                      ctx.rdx, ctx.r10, ctx.r8, ctx.r9));
 
         case SyscallNumber::Munmap:
             return sys_munmap(reinterpret_cast<void*>(ctx.rdi), ctx.rsi);
@@ -47,11 +43,9 @@ int64_t SyscallHandler::handle(SyscallContext& ctx) {
             return sys_fork();
 
         case SyscallNumber::Execve:
-            return sys_execve(
-                reinterpret_cast<const char*>(ctx.rdi),
-                reinterpret_cast<char* const*>(ctx.rsi),
-                reinterpret_cast<char* const*>(ctx.rdx)
-            );
+            return sys_execve(reinterpret_cast<const char*>(ctx.rdi),
+                              reinterpret_cast<char* const*>(ctx.rsi),
+                              reinterpret_cast<char* const*>(ctx.rdx));
 
         case SyscallNumber::MsgCreate:
             return sys_msg_create(reinterpret_cast<const char*>(ctx.rdi));
@@ -117,7 +111,8 @@ int64_t SyscallHandler::sys_close(int fd) {
     return -1;
 }
 
-void* SyscallHandler::sys_mmap(void* addr, size_t length, int prot, int flags, int fd, off_t offset) {
+void* SyscallHandler::sys_mmap(void* addr, size_t length, int prot, int flags, int fd,
+                               off_t offset) {
     return nullptr;
 }
 
@@ -172,9 +167,7 @@ pid_t SyscallHandler::sys_fork() {
             vmm.map_page(addr, new_phys, region->writable);
 
             uintptr_t parent_phys = vmm.get_physical_address(addr);
-            memcpy(reinterpret_cast<void*>(new_phys),
-                   reinterpret_cast<void*>(parent_phys),
-                   4096);
+            memcpy(reinterpret_cast<void*>(new_phys), reinterpret_cast<void*>(parent_phys), 4096);
         }
 
         add_memory_region(child, region->start, region->size, region->writable, region->executable);
@@ -200,7 +193,8 @@ pid_t SyscallHandler::sys_fork() {
 
     if (parent->envp) {
         int envc = 0;
-        while (parent->envp[envc]) envc++;
+        while (parent->envp[envc])
+            envc++;
         child->envp = new char*[envc + 1];
         for (int i = 0; i < envc; i++) {
             child->envp[i] = strdup(parent->envp[i]);
@@ -338,8 +332,7 @@ int64_t SyscallHandler::sys_sched_set_priority(pid_t pid, uint8_t priority) {
     auto& pm = ProcessManager::instance();
     auto* process = pm.get_current_process();
 
-    if (!process || (pid != process->pid && process->pid != 1))
-        return -1;
+    if (!process || (pid != process->pid && process->pid != 1)) return -1;
 
     Scheduler::instance().set_process_priority(pid, priority);
     return 0;
@@ -349,8 +342,7 @@ int64_t SyscallHandler::sys_sched_get_priority(pid_t pid) {
     auto& pm = ProcessManager::instance();
     auto* process = pm.get_process(pid);
 
-    if (!process)
-        return -1;
+    if (!process) return -1;
 
     return process->priority;
 }
