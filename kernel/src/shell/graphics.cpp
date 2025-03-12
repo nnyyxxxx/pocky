@@ -207,14 +207,14 @@ void set_mode13h() {
     outb(VGA_DAC_DATA, 0);
 
     outb(VGA_DAC_INDEX_WRITE, 1);
-    outb(VGA_DAC_DATA, 0);
-    outb(VGA_DAC_DATA, 0);
-    outb(VGA_DAC_DATA, 0);
+    outb(VGA_DAC_DATA, 63);
+    outb(VGA_DAC_DATA, 63);
+    outb(VGA_DAC_DATA, 63);
 
     outb(VGA_DAC_INDEX_WRITE, 2);
-    outb(VGA_DAC_DATA, 63);
-    outb(VGA_DAC_DATA, 63);
-    outb(VGA_DAC_DATA, 63);
+    outb(VGA_DAC_DATA, 6);
+    outb(VGA_DAC_DATA, 6);
+    outb(VGA_DAC_DATA, 6);
 
     for (int i = 3; i < 16; i++) {
         outb(VGA_DAC_INDEX_WRITE, i);
@@ -225,10 +225,10 @@ void set_mode13h() {
                 outb(VGA_DAC_DATA, 0);
                 outb(VGA_DAC_DATA, 0);
                 break;
-            case 2:
-                outb(VGA_DAC_DATA, 0);
-                outb(VGA_DAC_DATA, 63);
-                outb(VGA_DAC_DATA, 0);
+            case 8:
+                outb(VGA_DAC_DATA, 6);
+                outb(VGA_DAC_DATA, 6);
+                outb(VGA_DAC_DATA, 6);
                 break;
             case 9:
                 outb(VGA_DAC_DATA, 0);
