@@ -1,7 +1,8 @@
 #pragma once
 #include <cstddef>
-#include "vga.hpp"
+
 #include "shell.hpp"
+#include "vga.hpp"
 
 namespace pager {
 
@@ -14,4 +15,4 @@ void process_keypress(char c);
 bool is_active();
 void clear();
 
-} // namespace pager
+}  // namespace pager

@@ -1,6 +1,6 @@
 #pragma once
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 
 constexpr uint16_t PIT_CHANNEL0 = 0x40;
 constexpr uint16_t PIT_CHANNEL1 = 0x41;

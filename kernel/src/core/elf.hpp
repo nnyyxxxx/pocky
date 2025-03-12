@@ -127,4 +127,4 @@ private:
     static bool process_relocations(const Elf64_Ehdr* ehdr, const char* base);
 };
 
-}
+}  // namespace kernel

@@ -1,8 +1,9 @@
 #pragma once
 #include <cstddef>
+
 #include "core/types.hpp"
-#include "rtc.hpp"
 #include "pager.hpp"
+#include "rtc.hpp"
 
 using kernel::pid_t;
 
@@ -49,6 +50,7 @@ void cmd_userrm(const char* args);
 void cmd_su(const char* args);
 void cmd_whoami();
 void cmd_userlist();
+void cmd_cores();
 void set_red();
 void set_green();
 void set_blue();

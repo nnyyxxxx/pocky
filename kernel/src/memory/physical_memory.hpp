@@ -13,7 +13,9 @@ public:
     void* allocate_frame();
     void free_frame(void* frame);
     size_t get_free_frames() const;
-    size_t get_total_frames() const { return m_total_frames; }
+    size_t get_total_frames() const {
+        return m_total_frames;
+    }
 
 private:
     PhysicalMemoryManager() = default;

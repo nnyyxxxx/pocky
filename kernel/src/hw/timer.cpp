@@ -1,8 +1,8 @@
 #include "timer.hpp"
 
+#include <atomic>
 #include <cstdio>
 #include <cstring>
-#include <atomic>
 
 #include "core/scheduler.hpp"
 #include "idt.hpp"

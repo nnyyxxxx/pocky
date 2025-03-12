@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstring>
 #include <new>
+
 #include "memory/heap.hpp"
 
 namespace kernel {
@@ -35,7 +36,8 @@ public:
             m_data = nullptr;
     }
 
-    String(String&& other) noexcept : m_data(other.m_data), m_size(other.m_size), m_capacity(other.m_capacity) {
+    String(String&& other) noexcept
+        : m_data(other.m_data), m_size(other.m_size), m_capacity(other.m_capacity) {
         other.m_data = nullptr;
         other.m_size = 0;
         other.m_capacity = 0;
@@ -184,16 +186,14 @@ public:
     }
 
     void clear() {
-        if (m_data)
-            m_data[0] = '\0';
+        if (m_data) m_data[0] = '\0';
         m_size = 0;
     }
 
     String substr(size_t pos, size_t len = npos) const {
         if (pos >= m_size) return String();
 
-        if (len == npos || pos + len > m_size)
-            len = m_size - pos;
+        if (len == npos || pos + len > m_size) len = m_size - pos;
 
         String result;
         result.reserve(len + 1);
@@ -225,4 +225,4 @@ private:
     size_t m_capacity;
 };
 
-} // namespace kernel
+}  // namespace kernel

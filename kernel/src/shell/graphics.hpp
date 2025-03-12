@@ -1,7 +1,8 @@
 #pragma once
 #include <cstdint>
-#include "mouse.hpp"
+
 #include "../hw/rtc.hpp"
+#include "mouse.hpp"
 
 constexpr uint16_t GRAPHICS_WIDTH = 320;
 constexpr uint16_t GRAPHICS_HEIGHT = 200;

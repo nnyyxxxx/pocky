@@ -1,7 +1,7 @@
 #pragma once
 
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 
 namespace fs {
 
@@ -57,4 +57,4 @@ private:
     bool m_initialized;
 };
 
-} // namespace fs
+}  // namespace fs

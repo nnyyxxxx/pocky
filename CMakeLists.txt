@@ -34,6 +34,8 @@ set(KERNEL_CPP_SRCS
     ${KERNEL_SRC}/shell/shell.cpp
     ${KERNEL_SRC}/hw/gdt.cpp
     ${KERNEL_SRC}/hw/idt.cpp
+    ${KERNEL_SRC}/hw/acpi.cpp
+    ${KERNEL_SRC}/hw/smp.cpp
     ${KERNEL_SRC}/memory/physical_memory.cpp
     ${KERNEL_SRC}/memory/virtual_memory.cpp
     ${KERNEL_SRC}/memory/heap.cpp
@@ -65,6 +67,7 @@ set(KERNEL_ASM_SRCS
     ${KERNEL_SRC}/asm/timer.asm
     ${KERNEL_SRC}/asm/mouse.asm
     ${KERNEL_SRC}/asm/context.asm
+    ${KERNEL_SRC}/asm/ap_boot.asm
 )
 
 set(ASM_OBJECTS "")

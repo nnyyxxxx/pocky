@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <memory>
+
 #include "types.hpp"
 
 namespace kernel {
@@ -88,4 +89,4 @@ private:
     static int64_t sys_sched_get_priority(pid_t pid);
 };
 
-}
+}  // namespace kernel

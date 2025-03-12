@@ -37,7 +37,9 @@ public:
     FileNode* get_file(const char* path);
     bool write_file(const char* path, const uint8_t* data, size_t size);
     bool read_file(const char* path, uint8_t* buffer, size_t size);
-    FileNode* get_current_directory() const { return m_current_dir; }
+    FileNode* get_current_directory() const {
+        return m_current_dir;
+    }
     bool change_directory(const char* path);
     void list_directory(const char* path, void (*callback)(const FileNode*));
     const char* get_current_path() const;
@@ -57,4 +59,4 @@ private:
     mutable char m_path_buffer[MAX_PATH] = {0};
 };
 
-} // namespace fs
+}  // namespace fs

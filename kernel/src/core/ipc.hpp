@@ -1,9 +1,10 @@
 #pragma once
 
 #include <cstdint>
-#include "process.hpp"
-#include "lib/vector.hpp"
+
 #include "lib/string.hpp"
+#include "lib/vector.hpp"
+#include "process.hpp"
 
 namespace kernel {
 
@@ -27,10 +28,18 @@ public:
 
     bool receive_message(IPCMessage& message, bool wait);
 
-    pid_t get_owner() const { return m_owner; }
-    const char* get_name() const { return m_name; }
-    size_t get_message_count() const { return m_messages.size(); }
-    bool is_full() const { return m_messages.size() >= MAX_MESSAGES_PER_QUEUE; }
+    pid_t get_owner() const {
+        return m_owner;
+    }
+    const char* get_name() const {
+        return m_name;
+    }
+    size_t get_message_count() const {
+        return m_messages.size();
+    }
+    bool is_full() const {
+        return m_messages.size() >= MAX_MESSAGES_PER_QUEUE;
+    }
 
 private:
     pid_t m_owner = 0;
@@ -90,4 +99,4 @@ enum class IPCSyscallNumber : uint64_t {
     ShmDetach = 108,
 };
 
-} // namespace kernel
+}  // namespace kernel

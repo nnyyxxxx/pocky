@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+
 #include "elf.hpp"
 
 namespace kernel {
@@ -79,9 +80,15 @@ public:
     pid_t create_process(const char* name, pid_t ppid);
     void terminate_process(pid_t pid);
     Process* get_process(pid_t pid);
-    Process* get_first_process() { return m_first_process; }
-    Process* get_current_process() { return m_current_process; }
-    void set_current_process(Process* process) { m_current_process = process; }
+    Process* get_first_process() {
+        return m_first_process;
+    }
+    Process* get_current_process() {
+        return m_current_process;
+    }
+    void set_current_process(Process* process) {
+        m_current_process = process;
+    }
 
     bool load_program(Process* process, const char* path);
     void cleanup_process_memory(Process* process);

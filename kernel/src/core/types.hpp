@@ -44,4 +44,4 @@ constexpr int MAP_PRIVATE = 0x02;
 constexpr int MAP_FIXED = 0x10;
 constexpr int MAP_ANONYMOUS = 0x20;
 
-}
+}  // namespace kernel

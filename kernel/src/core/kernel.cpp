@@ -4,6 +4,8 @@
 #include "gdt.hpp"
 #include "graphics.hpp"
 #include "heap.hpp"
+#include "hw/acpi.hpp"
+#include "hw/smp.hpp"
 #include "idt.hpp"
 #include "io.hpp"
 #include "ipc.hpp"
@@ -142,6 +144,23 @@ extern "C" void kernel_main() {
     const char* msg14 = "[14] Scheduler Init Done";
     for (int i = 0; msg14[i] != '\0'; i++) {
         vga[i + 1040] = 0x0F00 | msg14[i];
+    }
+
+    auto& smp = kernel::SMPManager::instance();
+    smp.initialize();
+
+    const char* msg15 = "[15] SMP Init Done";
+    for (int i = 0; msg15[i] != '\0'; i++) {
+        vga[i + 1120] = 0x0F00 | msg15[i];
+    }
+
+    if (smp.is_smp_enabled()) {
+        smp.startup_application_processors();
+
+        const char* msg16 = "[16] AP Startup Done";
+        for (int i = 0; msg16[i] != '\0'; i++) {
+            vga[i + 1200] = 0x0F00 | msg16[i];
+        }
     }
 
     kernel::DynamicLinker::initialize();

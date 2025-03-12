@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <new>
+
 #include "memory/heap.hpp"
 
 namespace kernel {
@@ -21,8 +22,7 @@ public:
 
     ~Vector() {
         clear();
-        if (m_data)
-            operator delete(m_data);
+        if (m_data) operator delete(m_data);
     }
 
     Vector(const Vector& other) : m_size(other.m_size), m_capacity(other.m_capacity) {
@@ -35,7 +35,8 @@ public:
             m_data = nullptr;
     }
 
-    Vector(Vector&& other) noexcept : m_data(other.m_data), m_size(other.m_size), m_capacity(other.m_capacity) {
+    Vector(Vector&& other) noexcept
+        : m_data(other.m_data), m_size(other.m_size), m_capacity(other.m_capacity) {
         other.m_data = nullptr;
         other.m_size = 0;
         other.m_capacity = 0;
@@ -45,8 +46,7 @@ public:
         if (this != &other) {
             clear();
             if (m_capacity < other.m_size) {
-                if (m_data)
-                    operator delete(m_data);
+                if (m_data) operator delete(m_data);
                 m_capacity = other.m_capacity;
                 m_data = static_cast<T*>(operator new(sizeof(T) * m_capacity));
             }
@@ -61,8 +61,7 @@ public:
     Vector& operator=(Vector&& other) noexcept {
         if (this != &other) {
             clear();
-            if (m_data)
-                operator delete(m_data);
+            if (m_data) operator delete(m_data);
             m_data = other.m_data;
             m_size = other.m_size;
             m_capacity = other.m_capacity;
@@ -74,23 +73,20 @@ public:
     }
 
     void push_back(const T& value) {
-        if (m_size >= m_capacity)
-            reserve(m_capacity == 0 ? 1 : m_capacity * 2);
+        if (m_size >= m_capacity) reserve(m_capacity == 0 ? 1 : m_capacity * 2);
         new (&m_data[m_size]) T(value);
         m_size++;
     }
 
     void push_back(T&& value) {
-        if (m_size >= m_capacity)
-            reserve(m_capacity == 0 ? 1 : m_capacity * 2);
+        if (m_size >= m_capacity) reserve(m_capacity == 0 ? 1 : m_capacity * 2);
         new (&m_data[m_size]) T(static_cast<T&&>(value));
         m_size++;
     }
 
     template <typename... Args>
     T& emplace_back(Args&&... args) {
-        if (m_size >= m_capacity)
-            reserve(m_capacity == 0 ? 1 : m_capacity * 2);
+        if (m_size >= m_capacity) reserve(m_capacity == 0 ? 1 : m_capacity * 2);
         new (&m_data[m_size]) T(static_cast<Args&&>(args)...);
         return m_data[m_size++];
     }
@@ -111,16 +107,14 @@ public:
             m_data[i].~T();
         }
 
-        if (m_data)
-            operator delete(m_data);
+        if (m_data) operator delete(m_data);
 
         m_data = new_data;
         m_capacity = new_capacity;
     }
 
     void resize(size_t new_size) {
-        if (new_size > m_capacity)
-            reserve(new_size);
+        if (new_size > m_capacity) reserve(new_size);
 
         for (size_t i = m_size; i < new_size; i++) {
             new (&m_data[i]) T();
@@ -189,8 +183,7 @@ public:
     }
 
     void erase(T* position) {
-        if (position < begin() || position >= end())
-            return;
+        if (position < begin() || position >= end()) return;
 
         position->~T();
 
@@ -209,4 +202,4 @@ private:
     size_t m_capacity;
 };
 
-} // namespace kernel
+}  // namespace kernel

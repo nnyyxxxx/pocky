@@ -1,6 +1,7 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
+
 #include "vga.hpp"
 
 namespace screen_state {
@@ -13,4 +14,4 @@ void restore();
 
 void init();
 
-} // namespace screen_state
+}  // namespace screen_state

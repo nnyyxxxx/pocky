@@ -156,7 +156,8 @@ void cmd_help() {
                             "  userrm   - Remove a user\n"
                             "  su       - Switch to a different user\n"
                             "  whoami   - Show current user\n"
-                            "  userlist - List user accounts\n";
+                            "  userlist - List user accounts\n"
+                            "  cores    - List CPU cores\n";
 
     pager::show_text(help_text);
 
@@ -1013,6 +1014,8 @@ void process_command() {
         cmd_whoami();
     else if (strcmp(cmd, "userlist") == 0)
         cmd_userlist();
+    else if (strcmp(cmd, "cores") == 0)
+        cmd_cores();
     else {
         set_red();
         printf("Unknown command: %s\n", cmd);
@@ -1243,16 +1246,35 @@ void cmd_whoami() {
 }
 
 void cmd_userlist() {
-    auto& pm = kernel::ProcessManager::instance();
-    pid_t pid = pm.create_process("userlist", shell_pid);
-
-    printf("User accounts:\n\n");
-
     auto& user_manager = fs::CUserManager::instance();
 
+    printf("User accounts:\n");
     user_manager.list_users([](const char* username, uint32_t uid, uint32_t gid) {
-        printf("  Username: %-10s UID: %-5d GID: %-5d\n", username, uid, gid);
+        printf("  %s (UID: %d, GID: %d)\n", username, uid, gid);
     });
+}
 
-    pm.terminate_process(pid);
+void cmd_cores() {
+    auto& smp = kernel::SMPManager::instance();
+
+    smp.detect_active_cores();
+
+    uint32_t cpu_count = smp.get_cpu_count();
+    printf("ID | LAPIC ID | BSP | Active | Stack Address\n");
+    printf("---+---------+-----+--------+-------------\n");
+
+    uint32_t active_count = 0;
+    for (uint32_t i = 0; i < cpu_count; i++) {
+        auto* cpu_info = smp.get_cpu_info(i);
+        if (cpu_info && cpu_info->is_active) active_count++;
+    }
+
+    for (uint32_t i = 0; i < cpu_count; i++) {
+        auto* cpu_info = smp.get_cpu_info(i);
+        if (cpu_info) {
+            printf("%2u | %7u | %3s | %6s | 0x%016lx\n", cpu_info->id, cpu_info->lapic_id,
+                   cpu_info->is_bsp ? "Yes" : "No", cpu_info->is_active ? "Yes" : "No",
+                   cpu_info->kernel_stack);
+        }
+    }
 }

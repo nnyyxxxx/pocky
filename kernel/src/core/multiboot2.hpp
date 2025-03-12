@@ -76,4 +76,4 @@ struct MultibootMemoryMapTag {
 
 const MultibootMemoryMapTag* get_memory_map();
 
-} // namespace kernel
+}  // namespace kernel
