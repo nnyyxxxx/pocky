@@ -44,7 +44,7 @@ void terminal_putchar(char c) {
 
             for (uint16_t x = 0; x < VGA_WIDTH; x++) {
                 const uint16_t index = (VGA_HEIGHT - 1) * VGA_WIDTH + x;
-                VGA_MEMORY[index] = vga_entry(' ', terminal_color);
+                VGA_MEMORY[index] = vga_entry(' ', vga_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
             }
 
             terminal_row = VGA_HEIGHT - 1;
@@ -69,7 +69,7 @@ void terminal_putchar(char c) {
 
             for (uint16_t x = 0; x < VGA_WIDTH; x++) {
                 const uint16_t index = (VGA_HEIGHT - 1) * VGA_WIDTH + x;
-                VGA_MEMORY[index] = vga_entry(' ', terminal_color);
+                VGA_MEMORY[index] = vga_entry(' ', vga_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
             }
 
             terminal_row = VGA_HEIGHT - 1;

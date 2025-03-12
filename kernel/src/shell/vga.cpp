@@ -18,10 +18,18 @@ extern uint16_t terminal_column;
 void update_cursor() {
     uint16_t pos = terminal_row * VGA_WIDTH + terminal_column;
 
+    VGA_MEMORY[pos] = (VGA_MEMORY[pos] & 0x0FFF) | (VGA_COLOR_BLACK << 12);
+
     outb(VGA_CTRL_PORT, 14);
     outb(VGA_DATA_PORT, static_cast<uint8_t>(pos >> 8));
     outb(VGA_CTRL_PORT, 15);
     outb(VGA_DATA_PORT, static_cast<uint8_t>(pos & 0xFF));
+
+    outb(VGA_CTRL_PORT, 0x0A);
+    outb(VGA_DATA_PORT, 0x0E);
+
+    outb(VGA_CTRL_PORT, 0x0B);
+    outb(VGA_DATA_PORT, 0x0F);
 }
 
 void update_cursor_position(size_t x, size_t y) {
@@ -35,18 +43,15 @@ void update_cursor_position(size_t x, size_t y) {
 
 void cursor_initialize() {
     outb(VGA_CTRL_PORT, 0x0A);
-    outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xC0) | 14);
+    outb(VGA_DATA_PORT, 0x0E);
 
     outb(VGA_CTRL_PORT, 0x0B);
-    outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xE0) | 15);
+    outb(VGA_DATA_PORT, 0x0F);
 }
 
 void hide_cursor() {
     outb(VGA_CTRL_PORT, 0x0A);
     outb(VGA_DATA_PORT, 0x20);
-
-    outb(VGA_CTRL_PORT, 0x0B);
-    outb(VGA_DATA_PORT, 0x00);
 }
 
 void show_cursor() {
