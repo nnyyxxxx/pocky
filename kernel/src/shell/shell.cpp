@@ -814,19 +814,18 @@ void print_prompt() {
 
     set_white();
     printf("[");
-    set_green();
+    set_gray();
     printf("%s", username);
     set_white();
     printf("@");
-    set_blue();
+    set_gray();
     printf("kernel");
     printf(" ");
     set_gray();
     printf("%s", dir_name);
-    reset_color();
     set_white();
     printf("]");
-    set_green();
+    set_gray();
     printf("$");
     reset_color();
     printf(" ");
