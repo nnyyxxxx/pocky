@@ -10,7 +10,7 @@ build: format
 all: clean build
 
 format:
-	clang-format -i $(shell find $(KERNEL_SRC) -name "*.cpp" -o -name "*.hpp")
+	@clang-format -i $(shell find $(KERNEL_SRC) -name "*.cpp" -o -name "*.hpp") > /dev/null 2>&1
 
 run:
 	@mkdir -p $(BUILD_DIR)/iso/boot/grub
