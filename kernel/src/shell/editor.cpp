@@ -150,6 +150,7 @@ bool TextEditor::save() {
     if (!fs.updateFileSize(m_filename, m_buffer_size)) return false;
 
     m_modified = false;
+    display_status_line();
     return true;
 }
 
@@ -214,7 +215,15 @@ void TextEditor::process_keypress(char c) {
         }
 
         if (is_ctrl_key(c, 'S')) {
-            save();
+            if (save())
+                display_status_line();
+            else {
+                char status[TERMINAL_WIDTH + 1] = "ERROR: Failed to save file";
+                for (size_t i = 0; i < TERMINAL_WIDTH; i++) {
+                    terminal_putchar_at(i < strlen(status) ? status[i] : ' ', 0x4F, i, STATUS_LINE);
+                }
+                update_cursor();
+            }
             return;
         }
 
@@ -270,7 +279,15 @@ void TextEditor::process_keypress(char c) {
 
     if (m_mode == EditorMode::INSERT) {
         if (is_ctrl_key(c, 'S')) {
-            save();
+            if (save())
+                display_status_line();
+            else {
+                char status[TERMINAL_WIDTH + 1] = "ERROR: Failed to save file";
+                for (size_t i = 0; i < TERMINAL_WIDTH; i++) {
+                    terminal_putchar_at(i < strlen(status) ? status[i] : ' ', 0x4F, i, STATUS_LINE);
+                }
+                update_cursor();
+            }
             return;
         }
 
