@@ -264,6 +264,9 @@ void cmd_memory() {
 void initialize_filesystem() {
     auto& fs = fs::CFat32FileSystem::instance();
     if (!fs.mount()) printf("Failed to mount filesystem\n");
+
+    auto& user_manager = fs::CUserManager::instance();
+    user_manager.initialize();
 }
 
 void cmd_ls(const char* path) {
@@ -353,6 +356,13 @@ void cmd_cd(const char* path) {
         memcpy(name, entry, 11);
         name[11] = '\0';
 
+        for (int j = 10; j >= 0; j--) {
+            if (name[j] == ' ')
+                name[j] = '\0';
+            else
+                break;
+        }
+
         if (strcmp(name, path) == 0) {
             if (!(entry[11] & 0x10)) {
                 pm.terminate_process(pid);
@@ -360,7 +370,7 @@ void cmd_cd(const char* path) {
             }
             found = true;
 
-            char new_path[MAX_PATH];
+            char new_path[MAX_PATH] = {0};
             if (strcmp(fs.get_current_path(), "/") == 0)
                 snprintf(new_path, sizeof(new_path), "/%s", path);
             else
@@ -1061,6 +1071,11 @@ void init_shell() {
     pager::init_pager();
 
     screen_state::init();
+
+    initialize_filesystem();
+
+    auto& user_manager = fs::CUserManager::instance();
+    user_manager.switch_user("root", "root");
 
     printf("\n");
     print_prompt();
