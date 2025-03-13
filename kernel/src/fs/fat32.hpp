@@ -60,7 +60,62 @@ struct SFat32LFNEntry {
 } __attribute__((packed));
 
 class CFat32FileSystem {
+private:
+    static constexpr size_t MAX_DIR_STACK = 32;
+
+    struct SDirStackEntry {
+        char name[MAX_PATH];
+        char path[MAX_PATH];
+        uint32_t cluster;
+    };
+
+    CFat32FileSystem() {
+        strncpy(m_currentPath, "/", MAX_PATH - 1);
+        strncpy(m_currentDirName, "/", MAX_PATH - 1);
+        m_currentDirectoryCluster = 2;
+        m_dirStackSize = 1;
+
+        strncpy(m_dirStack[0].name, "/", MAX_PATH - 1);
+        strncpy(m_dirStack[0].path, "/", MAX_PATH - 1);
+        m_dirStack[0].cluster = ROOT_CLUSTER;
+    }
+
+    SDirStackEntry m_dirStack[MAX_DIR_STACK];
+    size_t m_dirStackSize;
+
 public:
+    bool push_directory(const char* name, const char* path, uint32_t cluster) {
+        if (m_dirStackSize >= MAX_DIR_STACK) return false;
+
+        strncpy(m_dirStack[m_dirStackSize].name, name, MAX_PATH - 1);
+        strncpy(m_dirStack[m_dirStackSize].path, path, MAX_PATH - 1);
+        m_dirStack[m_dirStackSize].cluster = cluster;
+        m_dirStackSize++;
+
+        return true;
+    }
+
+    bool pop_directory() {
+        if (m_dirStackSize <= 1) return false;
+
+        m_dirStackSize--;
+        strncpy(m_currentPath, m_dirStack[m_dirStackSize - 1].path, MAX_PATH - 1);
+        strncpy(m_currentDirName, m_dirStack[m_dirStackSize - 1].name, MAX_PATH - 1);
+        m_currentDirectoryCluster = m_dirStack[m_dirStackSize - 1].cluster;
+
+        return true;
+    }
+
+    const SDirStackEntry* get_current_dir_entry() const {
+        if (m_dirStackSize == 0) return nullptr;
+        return &m_dirStack[m_dirStackSize - 1];
+    }
+
+    const SDirStackEntry* get_parent_dir_entry() const {
+        if (m_dirStackSize <= 1) return nullptr;
+        return &m_dirStack[m_dirStackSize - 2];
+    }
+
     static CFat32FileSystem& instance() {
         static CFat32FileSystem instance;
         return instance;
@@ -120,12 +175,6 @@ public:
     bool updateFileSize(const char* filename, uint32_t newSize);
 
 private:
-    CFat32FileSystem() {
-        strncpy(m_currentPath, "/", MAX_PATH - 1);
-        strncpy(m_currentDirName, "/", MAX_PATH - 1);
-        m_currentDirectoryCluster = 2;
-    }
-    ~CFat32FileSystem() = default;
     CFat32FileSystem(const CFat32FileSystem&) = delete;
     CFat32FileSystem& operator=(const CFat32FileSystem&) = delete;
 

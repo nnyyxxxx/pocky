@@ -385,72 +385,14 @@ void cmd_cd(const char* path) {
     }
 
     if (strcmp(path, "..") == 0) {
-        const char* current_path = fs.get_current_path();
-        if (strcmp(current_path, "/") == 0) {
+        if (fs.pop_directory()) {
             pm.terminate_process(pid);
             return;
         }
 
-        uint8_t buffer[1024];
-        uint32_t current_dir_cluster = fs.get_current_directory_cluster();
-        fs.readFile(current_dir_cluster, buffer, sizeof(buffer));
-
-        uint32_t parent_cluster = ROOT_CLUSTER;
-
-        for (size_t i = 0; i < sizeof(buffer); i += 32) {
-            uint8_t* entry = &buffer[i];
-            if (entry[0] == 0x00) break;
-            if (entry[0] == 0xE5) continue;
-
-            char name[13] = {0};
-            memcpy(name, entry, 11);
-            name[11] = '\0';
-
-            for (int j = 10; j >= 0; j--) {
-                if (name[j] == ' ')
-                    name[j] = '\0';
-                else
-                    break;
-            }
-
-            if (strcmp(name, "..") == 0) {
-                parent_cluster = (entry[26] | (entry[27] << 8));
-                if (parent_cluster == 0) parent_cluster = ROOT_CLUSTER;
-                break;
-            }
-        }
-
-        const char* last_slash = strrchr(current_path, '/');
-        if (!last_slash || last_slash == current_path) {
-            fs.set_current_path("/");
-            fs.set_current_dir_name("/");
-            fs.set_current_directory_cluster(ROOT_CLUSTER);
-        } else {
-            char parent_path[MAX_PATH] = {0};
-            size_t parent_len = last_slash - current_path;
-            if (parent_len == 0) parent_len = 1;
-            strncpy(parent_path, current_path, parent_len);
-            parent_path[parent_len] = '\0';
-
-            if (parent_path[0] == '\0') strcpy(parent_path, "/");
-
-            const char* parent_dir_name = "/";
-            const char* prev_slash = parent_path;
-            if (strcmp(parent_path, "/") != 0) {
-                prev_slash = strrchr(parent_path, '/');
-                if (prev_slash && prev_slash != parent_path)
-                    parent_dir_name = prev_slash + 1;
-                else if (prev_slash == parent_path)
-                    parent_dir_name = parent_path + 1;
-                else
-                    parent_dir_name = parent_path;
-            }
-
-            fs.set_current_path(parent_path);
-            fs.set_current_dir_name(parent_dir_name);
-            fs.set_current_directory_cluster(parent_cluster);
-        }
-
+        fs.set_current_path("/");
+        fs.set_current_dir_name("/");
+        fs.set_current_directory_cluster(ROOT_CLUSTER);
         pm.terminate_process(pid);
         return;
     }
@@ -490,6 +432,8 @@ void cmd_cd(const char* path) {
                 snprintf(new_path, sizeof(new_path), "/%s", path);
             else
                 snprintf(new_path, sizeof(new_path), "%s/%s", fs.get_current_path(), path);
+
+            fs.push_directory(path, new_path, dir_cluster);
 
             fs.set_current_path(new_path);
             fs.set_current_dir_name(path);
