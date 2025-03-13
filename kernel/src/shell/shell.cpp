@@ -111,12 +111,14 @@ void print_file_size(uint32_t size) {
 }
 
 void list_callback(const char* name, uint8_t attributes, uint32_t size) {
-    print_file_type(attributes);
-    printf(" ");
-    print_file_size(size);
-    printf("%s", name);
-    if (attributes & 0x10) printf("/");
-    printf("\n");
+    if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) return;
+
+    if (attributes & 0x10)
+        printf("d ");
+    else
+        printf("f ");
+
+    printf("%s\n", name);
 }
 
 template <typename F>
@@ -277,7 +279,26 @@ void cmd_ls(const char* path) {
 
     auto& fs = fs::CFat32FileSystem::instance();
     uint8_t buffer[1024];
-    fs.readFile(ROOT_CLUSTER, buffer, sizeof(buffer));
+
+    uint32_t cluster = ROOT_CLUSTER;
+    uint32_t size = 0;
+    uint8_t attributes = 0;
+
+    if (path && *path) {
+        if (!fs.findFile(path, cluster, size, attributes)) {
+            printf("Directory not found: %s\n", path);
+            pm.terminate_process(pid);
+            return;
+        }
+
+        if (!(attributes & 0x10)) {
+            printf("Not a directory: %s\n", path);
+            pm.terminate_process(pid);
+            return;
+        }
+    }
+
+    fs.readFile(cluster, buffer, sizeof(buffer));
 
     bool found_entries = false;
     for (size_t i = 0; i < sizeof(buffer); i += 32) {
