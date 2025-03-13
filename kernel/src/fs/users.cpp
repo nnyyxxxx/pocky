@@ -17,14 +17,22 @@ CUserManager::CUserManager() : m_user_count(0), m_current_user_index(0), m_initi
 bool CUserManager::initialize() {
     if (m_initialized) return true;
 
-    auto& fs = CFat32FileSystem::instance();
+    if (!user_exists("root")) {
+        SUserInfo& user = m_users[m_user_count];
+        strncpy(user.username, "root", MAX_USERNAME - 1);
+        strncpy(user.password, "root", MAX_PASSWORD - 1);
+        user.uid = 1;
+        user.gid = 1;
+        user.active = true;
+        m_user_count++;
+    }
 
-    uint8_t empty[0];
-    fs.writeFile(ROOT_CLUSTER, empty, 0);
-
-    if (!add_user("root", "root")) return false;
-
-    if (!load_user_data()) save_user_data();
+    for (size_t i = 0; i < m_user_count; i++) {
+        if (strcmp(m_users[i].username, "root") == 0) {
+            m_current_user_index = i;
+            break;
+        }
+    }
 
     m_initialized = true;
     return true;
@@ -81,16 +89,22 @@ bool CUserManager::switch_user(const char* username, const char* password) {
     m_current_user_index = user - m_users;
 
     auto& fs = CFat32FileSystem::instance();
-    char home_path[MAX_PATH];
 
-    if (strcmp(user->username, "root") == 0)
-        strcpy(home_path, "/");
-    else {
+    fs.set_current_path("/");
+
+    if (strcmp(user->username, "root") != 0) {
+        char home_path[MAX_PATH] = {0};
         strcpy(home_path, "/home/");
         strcat(home_path, user->username);
-    }
 
-    fs.set_current_path(home_path);
+        fs.createDirectory("home");
+
+        char username_copy[MAX_USERNAME] = {0};
+        strcpy(username_copy, user->username);
+        fs.createDirectory(username_copy);
+
+        fs.set_current_path(home_path);
+    }
 
     return true;
 }
@@ -171,8 +185,12 @@ bool CUserManager::create_home_directory(const char* username) {
     if (strcmp(username, "root") == 0) return true;
 
     auto& fs = CFat32FileSystem::instance();
-    uint8_t empty[0];
-    fs.writeFile(ROOT_CLUSTER, empty, 0);
+
+    fs.createDirectory("home");
+
+    char user_dir[MAX_USERNAME] = {0};
+    strcpy(user_dir, username);
+    fs.createDirectory(user_dir);
 
     return true;
 }
