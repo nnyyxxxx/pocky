@@ -147,6 +147,8 @@ bool TextEditor::save() {
 
     if (!fs.writeFile(cluster, reinterpret_cast<uint8_t*>(m_buffer), m_buffer_size)) return false;
 
+    if (!fs.updateFileSize(m_filename, m_buffer_size)) return false;
+
     m_modified = false;
     return true;
 }
@@ -217,8 +219,7 @@ void TextEditor::process_keypress(char c) {
         }
 
         if (is_ctrl_key(c, 'Q')) {
-            m_active = false;
-            terminal_clear();
+            close();
             return;
         }
 
@@ -274,8 +275,7 @@ void TextEditor::process_keypress(char c) {
         }
 
         if (is_ctrl_key(c, 'Q')) {
-            m_active = false;
-            terminal_clear();
+            close();
             return;
         }
 

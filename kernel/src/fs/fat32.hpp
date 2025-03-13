@@ -117,6 +117,8 @@ public:
     bool findFileInDirectory(uint32_t dirCluster, const char* name, uint32_t& cluster,
                              uint32_t& size, uint8_t& attributes);
 
+    bool updateFileSize(const char* filename, uint32_t newSize);
+
 private:
     CFat32FileSystem() {
         strncpy(m_currentPath, "/", MAX_PATH - 1);

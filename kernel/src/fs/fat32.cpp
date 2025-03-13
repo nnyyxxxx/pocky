@@ -338,7 +338,21 @@ bool CFat32FileSystem::writeFile(uint32_t startCluster, const uint8_t* data, siz
 
         uint32_t nextCluster = readFatEntry(currentCluster);
         if (nextCluster >= 0x0FFFFFF8) {
-            printf("FAT32: End of cluster chain reached during file write\n");
+            if (bytesWritten < dataSize) {
+                uint32_t newCluster = allocateCluster();
+                if (newCluster == 0) {
+                    printf("FAT32: Failed to allocate new cluster for file write\n");
+                    return false;
+                }
+
+                if (!updateFatEntry(currentCluster, newCluster)) {
+                    printf("FAT32: Failed to update FAT entry\n");
+                    return false;
+                }
+
+                currentCluster = newCluster;
+                continue;
+            }
             break;
         }
         if (nextCluster == 0x0FFFFFF7) {
@@ -348,6 +362,12 @@ bool CFat32FileSystem::writeFile(uint32_t startCluster, const uint8_t* data, siz
 
         currentCluster = nextCluster;
     }
+
+    if (!updateFatEntry(currentCluster, 0x0FFFFFF8)) {
+        printf("FAT32: Failed to mark end of file\n");
+        return false;
+    }
+
     return true;
 }
 
@@ -833,6 +853,51 @@ bool CFat32FileSystem::findFileInDirectory(uint32_t dirCluster, const char* name
         if (nextCluster == 0x0FFFFFF7) return false;
 
         currentCluster = nextCluster;
+    }
+
+    return false;
+}
+
+bool CFat32FileSystem::updateFileSize(const char* filename, uint32_t newSize) {
+    uint32_t parentCluster = m_currentDirectoryCluster;
+
+    if (filename[0] == '/') {
+        parentCluster = ROOT_CLUSTER;
+        filename++;
+    }
+
+    uint8_t sectorData[m_bpb.m_bytesPerSector];
+    uint32_t sector = (parentCluster - 2) * m_bpb.m_sectorsPerCluster + m_firstDataSector;
+
+    if (!readSector(sector, sectorData)) return false;
+
+    for (size_t i = 0; i < m_bpb.m_bytesPerSector; i += 32) {
+        uint8_t* entry = &sectorData[i];
+        if (entry[0] == 0x00) break;
+        if (entry[0] == 0xE5) continue;
+
+        if (entry[11] == 0x0F) continue;
+
+        char entryName[13] = {0};
+        memcpy(entryName, entry, 11);
+
+        for (int j = 10; j >= 0; j--) {
+            if (entryName[j] == ' ')
+                entryName[j] = 0;
+            else if (entryName[j] != 0)
+                break;
+        }
+
+        if (strcmp(entryName, filename) == 0) {
+            entry[28] = newSize & 0xFF;
+            entry[29] = (newSize >> 8) & 0xFF;
+            entry[30] = (newSize >> 16) & 0xFF;
+            entry[31] = (newSize >> 24) & 0xFF;
+
+            if (!diskWrite(sector, sectorData, m_bpb.m_bytesPerSector)) return false;
+
+            return true;
+        }
     }
 
     return false;
