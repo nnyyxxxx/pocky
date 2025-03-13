@@ -44,7 +44,6 @@ set(KERNEL_CPP_SRCS
     ${KERNEL_SRC}/core/elf.cpp
     ${KERNEL_SRC}/core/dynamic_linker.cpp
     ${KERNEL_SRC}/lib/printf.cpp
-    ${KERNEL_SRC}/fs/users.cpp
     ${KERNEL_SRC}/fs/fat32.cpp
     ${KERNEL_SRC}/hw/timer.cpp
     ${KERNEL_SRC}/shell/editor.cpp

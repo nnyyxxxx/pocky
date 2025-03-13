@@ -10,7 +10,6 @@
 #include "drivers/keyboard.hpp"
 #include "editor.hpp"
 #include "fs/fat32.hpp"
-#include "fs/users.hpp"
 #include "graphics.hpp"
 #include "io.hpp"
 #include "lib/lib.hpp"
@@ -168,11 +167,6 @@ void cmd_help() {
                             "  ps       - List running processes\n"
                             "  pkill    - Kill a process\n"
                             "  ipctest  - Run IPC test\n"
-                            "  useradd  - Add a new user\n"
-                            "  userrm   - Remove a user\n"
-                            "  su       - Switch to a different user\n"
-                            "  whoami   - Show current user\n"
-                            "  userlist - List user accounts\n"
                             "  cores    - List CPU cores\n";
 
     pager::show_text(help_text);
@@ -267,9 +261,6 @@ void initialize_filesystem() {
     auto& fs = fs::CFat32FileSystem::instance();
     if (!fs.mount()) printf("Failed to mount filesystem\n");
 
-    auto& user_manager = fs::CUserManager::instance();
-    user_manager.initialize();
-
     uint32_t saved_cluster = fs.get_current_directory_cluster();
     const char* saved_path = fs.get_current_path();
     const char* saved_dir_name = fs.get_current_dir_name();
@@ -278,7 +269,7 @@ void initialize_filesystem() {
     fs.set_current_dir_name("/");
     fs.set_current_directory_cluster(ROOT_CLUSTER);
 
-    const char* default_dirs[] = {"etc", "home", "tmp"};
+    const char* default_dirs[] = {"etc", "tmp"};
     for (const char* dir : default_dirs) {
         uint32_t cluster, size;
         uint8_t attributes;
@@ -916,8 +907,6 @@ const char* get_dir_name(const char* path) {
 }
 
 void print_prompt() {
-    auto& user_manager = fs::CUserManager::instance();
-    const char* username = user_manager.get_current_username();
     auto& fs = fs::CFat32FileSystem::instance();
     const char* dir_name = fs.get_current_dir_name();
 
@@ -929,7 +918,7 @@ void print_prompt() {
     set_white();
     printf("[");
     set_gray();
-    printf("%s", username);
+    printf("root");
     set_white();
     printf("@");
     set_gray();
@@ -1123,16 +1112,6 @@ void process_command() {
         cmd_less(args);
     else if (strcmp(cmd, "ipctest") == 0)
         cmd_ipc_test();
-    else if (strcmp(cmd, "useradd") == 0)
-        cmd_useradd(args);
-    else if (strcmp(cmd, "userrm") == 0)
-        cmd_userrm(args);
-    else if (strcmp(cmd, "su") == 0)
-        cmd_su(args);
-    else if (strcmp(cmd, "whoami") == 0)
-        cmd_whoami();
-    else if (strcmp(cmd, "userlist") == 0)
-        cmd_userlist();
     else if (strcmp(cmd, "cores") == 0)
         cmd_cores();
     else {
@@ -1166,9 +1145,6 @@ void init_shell() {
     fs.set_current_path("/");
     fs.set_current_dir_name("/");
     fs.set_current_directory_cluster(ROOT_CLUSTER);
-
-    auto& user_manager = fs::CUserManager::instance();
-    user_manager.switch_user("root", "root");
 
     printf("\n");
     print_prompt();
@@ -1263,124 +1239,6 @@ void cmd_ipc_test() {
 
     printf("IPC test completed successfully!\n");
     pm.terminate_process(test_pid);
-}
-
-void cmd_useradd(const char* args) {
-    if (!args || args[0] == '\0') {
-        printf("useradd: missing arguments\n");
-        printf("Usage: useradd <username> <password>\n");
-        return;
-    }
-
-    char username[fs::MAX_USERNAME] = {0};
-    char password[fs::MAX_PASSWORD] = {0};
-
-    size_t arg_len = strlen(args);
-    size_t i = 0;
-
-    size_t username_len = 0;
-    while (i < arg_len && args[i] != ' ' && username_len < fs::MAX_USERNAME - 1) {
-        username[username_len++] = args[i++];
-    }
-    username[username_len] = '\0';
-
-    while (i < arg_len && args[i] == ' ')
-        i++;
-
-    size_t password_len = 0;
-    while (i < arg_len && password_len < fs::MAX_PASSWORD - 1) {
-        password[password_len++] = args[i++];
-    }
-    password[password_len] = '\0';
-
-    if (username_len == 0) {
-        printf("useradd: missing username\n");
-        return;
-    }
-
-    if (password_len == 0) {
-        printf("useradd: missing password\n");
-        return;
-    }
-
-    auto& user_manager = fs::CUserManager::instance();
-    if (user_manager.add_user(username, password))
-        printf("User '%s' created successfully\n", username);
-    else
-        printf("Failed to create user '%s'\n", username);
-}
-
-void cmd_userrm(const char* args) {
-    if (!args || args[0] == '\0') {
-        printf("userrm: missing username\n");
-        printf("Usage: userrm <username>\n");
-        return;
-    }
-
-    auto& user_manager = fs::CUserManager::instance();
-    if (user_manager.remove_user(args))
-        printf("User '%s' removed successfully\n", args);
-    else
-        printf("Failed to remove user '%s'\n", args);
-}
-
-void cmd_su(const char* args) {
-    if (!args || args[0] == '\0') {
-        printf("su: missing username\n");
-        printf("Usage: su <username> <password>\n");
-        return;
-    }
-
-    char username[fs::MAX_USERNAME] = {0};
-    char password[fs::MAX_PASSWORD] = {0};
-
-    size_t arg_len = strlen(args);
-    size_t i = 0;
-
-    size_t username_len = 0;
-    while (i < arg_len && args[i] != ' ' && username_len < fs::MAX_USERNAME - 1) {
-        username[username_len++] = args[i++];
-    }
-    username[username_len] = '\0';
-
-    while (i < arg_len && args[i] == ' ')
-        i++;
-
-    size_t password_len = 0;
-    while (i < arg_len && password_len < fs::MAX_PASSWORD - 1) {
-        password[password_len++] = args[i++];
-    }
-    password[password_len] = '\0';
-
-    if (username_len == 0) {
-        printf("su: missing username\n");
-        return;
-    }
-
-    if (password_len == 0) {
-        printf("su: missing password\n");
-        return;
-    }
-
-    auto& user_manager = fs::CUserManager::instance();
-    if (user_manager.switch_user(username, password))
-        printf("Switched to user '%s'\n", username);
-    else
-        printf("Authentication failed for user '%s'\n", username);
-}
-
-void cmd_whoami() {
-    auto& user_manager = fs::CUserManager::instance();
-    printf("%s\n", user_manager.get_current_username());
-}
-
-void cmd_userlist() {
-    auto& user_manager = fs::CUserManager::instance();
-
-    printf("User accounts:\n");
-    user_manager.list_users([](const char* username, uint32_t uid, uint32_t gid) {
-        printf("  %s (UID: %d, GID: %d)\n", username, uid, gid);
-    });
 }
 
 void cmd_cores() {

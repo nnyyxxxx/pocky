@@ -855,9 +855,40 @@ bool CFat32FileSystem::renameFile(const char* oldName, const char* newName) {
     uint8_t attributes;
     if (!findFile(oldName, cluster, size, attributes)) return false;
 
-    if (!createFile(newName, attributes)) return false;
+    uint32_t dstCluster, dstSize;
+    uint8_t dstAttributes;
+    if (findFile(newName, dstCluster, dstSize, dstAttributes)) return false;
 
-    return deleteFile(oldName);
+    uint8_t sectorData[m_bpb.m_bytesPerSector];
+    uint32_t sector =
+        (m_currentDirectoryCluster - 2) * m_bpb.m_sectorsPerCluster + m_firstDataSector;
+
+    if (!readSector(sector, sectorData)) return false;
+
+    for (size_t i = 0; i < m_bpb.m_bytesPerSector; i += 32) {
+        uint8_t* entry = &sectorData[i];
+        if (entry[0] == 0x00) break;
+        if (entry[0] == 0xE5) continue;
+
+        char entryName[13] = {0};
+        memcpy(entryName, entry, 11);
+        for (int j = 10; j >= 0; j--) {
+            if (entryName[j] == ' ')
+                entryName[j] = '\0';
+            else
+                break;
+        }
+
+        if (strcmp(entryName, oldName) == 0) {
+            memset(entry, ' ', 11);
+            strncpy(reinterpret_cast<char*>(entry), newName, strlen(newName));
+
+            if (!diskWrite(sector, sectorData, m_bpb.m_bytesPerSector)) return false;
+            return true;
+        }
+    }
+
+    return false;
 }
 
 bool CFat32FileSystem::findFile(const char* name, uint32_t& cluster, uint32_t& size,
