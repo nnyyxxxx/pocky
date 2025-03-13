@@ -3,7 +3,7 @@
 #include <cstdio>
 #include <cstring>
 
-#include "fs/filesystem.hpp"
+#include "fs/fat32.hpp"
 #include "io.hpp"
 #include "printf.hpp"
 #include "screen_state.hpp"
@@ -38,31 +38,76 @@ TextEditor& TextEditor::instance() {
     return instance;
 }
 
+size_t TextEditor::get_line_length(size_t row) const {
+    size_t pos = 0;
+    size_t current_row = 0;
+
+    while (pos < m_buffer_size) {
+        if (current_row == row) {
+            size_t len = 0;
+            while (pos + len < m_buffer_size && m_buffer[pos + len] != '\n')
+                len++;
+            return len;
+        }
+
+        if (m_buffer[pos] == '\n') current_row++;
+        pos++;
+    }
+
+    return 0;
+}
+
+void TextEditor::update_cursor_pos() {
+    size_t pos = 0;
+    size_t current_row = 0;
+    size_t current_col = 0;
+
+    while (pos < m_buffer_size) {
+        if (current_row == m_cursor_row && current_col == m_cursor_col) {
+            m_cursor_pos = pos;
+            return;
+        }
+
+        if (m_buffer[pos] == '\n') {
+            current_row++;
+            current_col = 0;
+        } else
+            current_col++;
+
+        pos++;
+    }
+
+    m_cursor_pos = pos;
+}
+
 bool TextEditor::open(const char* filename) {
     if (!filename || !*filename) return false;
 
     strncpy(m_filename, filename, MAX_FILENAME_LENGTH - 1);
     m_filename[MAX_FILENAME_LENGTH - 1] = '\0';
 
-    auto& fs = fs::FileSystem::instance();
-    auto node = fs.get_file(filename);
+    auto& fs = fs::CFat32FileSystem::instance();
+    uint32_t cluster, size;
+    uint8_t attributes;
+    bool file_exists = fs.findFile(filename, cluster, size, attributes);
 
-    if (!node) {
-        fs.create_file(filename, fs::FileType::Regular);
+    if (!file_exists) {
+        if (!fs.createFile(filename, 0)) return false;
         m_buffer_size = 0;
         m_buffer[0] = '\0';
-    } else if (node->type == fs::FileType::Directory)
-        return false;
-    else if (node->type != fs::FileType::Regular)
-        return false;
-    else if (node->size >= MAX_BUFFER_SIZE)
-        return false;
+    } else {
+        if (attributes & 0x10) return false;
+        if (size >= MAX_BUFFER_SIZE) return false;
 
-    m_buffer_size = node->size;
-    if (m_buffer_size > 0 &&
-        !fs.read_file(filename, reinterpret_cast<uint8_t*>(m_buffer), m_buffer_size))
-        return false;
-    m_buffer[m_buffer_size] = '\0';
+        m_buffer_size = size;
+        if (m_buffer_size > 0) {
+            uint8_t* file_data = new uint8_t[m_buffer_size];
+            fs.readFile(cluster, file_data, m_buffer_size);
+            memcpy(m_buffer, file_data, m_buffer_size);
+            delete[] file_data;
+        }
+        m_buffer[m_buffer_size] = '\0';
+    }
 
     m_cursor_pos = 0;
     m_cursor_row = 0;
@@ -87,18 +132,21 @@ bool TextEditor::open(const char* filename) {
 }
 
 bool TextEditor::save() {
-    if (!m_active || !m_filename[0]) return false;
+    if (!m_active) return false;
 
-    auto& fs = fs::FileSystem::instance();
-    bool success =
-        fs.write_file(m_filename, reinterpret_cast<const uint8_t*>(m_buffer), m_buffer_size);
+    auto& fs = fs::CFat32FileSystem::instance();
+    uint32_t cluster, size;
+    uint8_t attributes;
+    if (!fs.findFile(m_filename, cluster, size, attributes))
+        if (!fs.createFile(m_filename, 0)) return false;
 
-    if (success) {
-        m_modified = false;
-        display_status_line();
-    }
+    if (!fs.writeFile(cluster, reinterpret_cast<uint8_t*>(m_buffer), m_buffer_size)) return false;
 
-    return success;
+    if (!fs.updateFileSize(m_filename, m_buffer_size)) return false;
+
+    m_modified = false;
+    display_status_line();
+    return true;
 }
 
 void TextEditor::close() {
@@ -130,113 +178,162 @@ void TextEditor::close() {
 void TextEditor::process_keypress(char c) {
     if (!m_active) return;
 
-    if (is_ctrl_key(c, 'q')) {
-        if (!m_modified || (m_modified && save())) close();
+    if (c == 0x1B) {
+        m_mode = EditorMode::NORMAL;
+        outb(VGA_CTRL_PORT, 0x0A);
+        outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xC0) | CURSOR_NORMAL_START);
+        outb(VGA_CTRL_PORT, 0x0B);
+        outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xE0) | CURSOR_NORMAL_END);
+        display_status_line();
         return;
     }
 
-    if (is_ctrl_key(c, 's')) {
-        save();
+    if (m_mode == EditorMode::NORMAL) {
+        if (c == 'i') {
+            m_mode = EditorMode::INSERT;
+            outb(VGA_CTRL_PORT, 0x0A);
+            outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xC0) | CURSOR_INSERT_START);
+            outb(VGA_CTRL_PORT, 0x0B);
+            outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xE0) | CURSOR_INSERT_END);
+            display_status_line();
+            return;
+        }
+
+        if (c == 'a') {
+            m_mode = EditorMode::INSERT;
+            outb(VGA_CTRL_PORT, 0x0A);
+            outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xC0) | CURSOR_INSERT_START);
+            outb(VGA_CTRL_PORT, 0x0B);
+            outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xE0) | CURSOR_INSERT_END);
+            display_status_line();
+            return;
+        }
+
+        if (is_ctrl_key(c, 'S')) {
+            if (save())
+                display_status_line();
+            else {
+                char status[TERMINAL_WIDTH + 1] = "ERROR: Failed to save file";
+                for (size_t i = 0; i < TERMINAL_WIDTH; i++) {
+                    terminal_putchar_at(i < strlen(status) ? status[i] : ' ', 0x4F, i, STATUS_LINE);
+                }
+                update_cursor();
+            }
+            return;
+        }
+
+        if (is_ctrl_key(c, 'Q')) {
+            close();
+            return;
+        }
+
+        if (c == 'h' && m_cursor_col > 0) {
+            m_cursor_col--;
+            m_cursor_pos--;
+            update_cursor();
+            return;
+        }
+
+        if (c == 'l' && m_cursor_col < get_line_length(m_cursor_row)) {
+            m_cursor_col++;
+            m_cursor_pos++;
+            update_cursor();
+            return;
+        }
+
+        if (c == 'k' && m_cursor_row > 0) {
+            size_t prev_line_length = get_line_length(m_cursor_row - 1);
+            m_cursor_row--;
+            m_cursor_col = m_cursor_col > prev_line_length ? prev_line_length : m_cursor_col;
+            update_cursor_pos();
+            if (m_cursor_row < m_screen_row) {
+                m_screen_row = m_cursor_row;
+                render();
+            } else
+                update_cursor();
+            return;
+        }
+
+        if (c == 'j') {
+            size_t next_line_length = get_line_length(m_cursor_row + 1);
+            if (next_line_length != static_cast<size_t>(-1)) {
+                m_cursor_row++;
+                m_cursor_col = m_cursor_col > next_line_length ? next_line_length : m_cursor_col;
+                update_cursor_pos();
+                if (m_cursor_row >= m_screen_row + TERMINAL_HEIGHT - 1) {
+                    m_screen_row = m_cursor_row - TERMINAL_HEIGHT + 2;
+                    render();
+                } else
+                    update_cursor();
+            }
+            return;
+        }
+
         return;
     }
 
-    if (m_mode == EditorMode::NORMAL)
-        process_normal_mode(c);
-    else
-        process_insert_mode(c);
-
-    render();
-}
-
-void TextEditor::process_normal_mode(char c) {
-    switch (c) {
-        case 'h':
-            move_cursor_left();
-            break;
-        case 'j':
-            move_cursor_down();
-            break;
-        case 'k':
-            move_cursor_up();
-            break;
-        case 'l':
-            move_cursor_right();
-            break;
-        case 'i':
-            switch_to_insert_mode();
-            break;
-        case 'a':
-            if (m_cursor_pos < m_buffer_size) move_cursor_right();
-            switch_to_insert_mode();
-            break;
-        case 'x':
-            delete_char();
-            break;
-        case 'd':
-            size_t line_start = m_cursor_pos;
-            while (line_start > 0 && m_buffer[line_start - 1] != '\n') {
-                line_start--;
+    if (m_mode == EditorMode::INSERT) {
+        if (is_ctrl_key(c, 'S')) {
+            if (save())
+                display_status_line();
+            else {
+                char status[TERMINAL_WIDTH + 1] = "ERROR: Failed to save file";
+                for (size_t i = 0; i < TERMINAL_WIDTH; i++) {
+                    terminal_putchar_at(i < strlen(status) ? status[i] : ' ', 0x4F, i, STATUS_LINE);
+                }
+                update_cursor();
             }
+            return;
+        }
 
-            size_t line_end = m_cursor_pos;
-            while (line_end < m_buffer_size && m_buffer[line_end] != '\n') {
-                line_end++;
-            }
-            if (line_end < m_buffer_size) line_end++;
+        if (is_ctrl_key(c, 'Q')) {
+            close();
+            return;
+        }
 
-            size_t line_length = line_end - line_start;
-            if (line_length > 0) {
-                memmove(&m_buffer[line_start], &m_buffer[line_end], m_buffer_size - line_end + 1);
-                m_buffer_size -= line_length;
-                m_cursor_pos = line_start;
-                m_cursor_col = 0;
-                m_modified = true;
-                update_screen_position();
+        if (c == '\b' && m_cursor_pos > 0) {
+            memmove(&m_buffer[m_cursor_pos - 1], &m_buffer[m_cursor_pos],
+                    m_buffer_size - m_cursor_pos);
+            m_buffer_size--;
+            m_cursor_pos--;
+            if (m_cursor_col > 0)
+                m_cursor_col--;
+            else {
+                m_cursor_row--;
+                m_cursor_col = get_line_length(m_cursor_row);
             }
-            break;
+            m_modified = true;
+            render();
+            return;
+        }
+
+        if (c >= 32 && c < 127 && m_buffer_size < MAX_BUFFER_SIZE - 1) {
+            memmove(&m_buffer[m_cursor_pos + 1], &m_buffer[m_cursor_pos],
+                    m_buffer_size - m_cursor_pos);
+            m_buffer[m_cursor_pos] = c;
+            m_buffer_size++;
+            m_cursor_pos++;
+            m_cursor_col++;
+            m_modified = true;
+            render();
+            return;
+        }
+
+        if ((c == '\r' || c == '\n') && m_buffer_size < MAX_BUFFER_SIZE - 1) {
+            memmove(&m_buffer[m_cursor_pos + 1], &m_buffer[m_cursor_pos],
+                    m_buffer_size - m_cursor_pos);
+            m_buffer[m_cursor_pos] = '\n';
+            m_buffer_size++;
+            m_cursor_pos++;
+            m_cursor_row++;
+            m_cursor_col = 0;
+            m_modified = true;
+            if (m_cursor_row >= m_screen_row + TERMINAL_HEIGHT - 1)
+                m_screen_row = m_cursor_row - TERMINAL_HEIGHT + 2;
+            render();
+            return;
+        }
     }
-}
-
-void TextEditor::process_insert_mode(char c) {
-    switch (c) {
-        case 27:
-            switch_to_normal_mode();
-            break;
-        case '\n':
-            insert_char('\n');
-            break;
-        case '\b':
-            backspace();
-            break;
-        case 127:
-            delete_char();
-            break;
-        default:
-            if (c >= 32 && c < 127) insert_char(c);
-            break;
-    }
-}
-
-void TextEditor::switch_to_normal_mode() {
-    m_mode = EditorMode::NORMAL;
-
-    outb(VGA_CTRL_PORT, 0x0A);
-    outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xC0) | CURSOR_NORMAL_START);
-    outb(VGA_CTRL_PORT, 0x0B);
-    outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xE0) | CURSOR_NORMAL_END);
-
-    display_status_line();
-}
-
-void TextEditor::switch_to_insert_mode() {
-    m_mode = EditorMode::INSERT;
-
-    outb(VGA_CTRL_PORT, 0x0A);
-    outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xC0) | CURSOR_INSERT_START);
-    outb(VGA_CTRL_PORT, 0x0B);
-    outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xE0) | CURSOR_INSERT_END);
-
-    display_status_line();
 }
 
 void TextEditor::render() {
@@ -546,16 +643,6 @@ void init_editor() {
 void cmd_edit(const char* filename) {
     if (!filename || !*filename) {
         printf("Usage: edit <filename>\n");
-        print_prompt();
-        return;
-    }
-
-    auto& fs = fs::FileSystem::instance();
-    auto node = fs.get_file(filename);
-    if (node && node->type == fs::FileType::Directory) {
-        printf("Cannot edit directory: ");
-        printf(filename);
-        printf("\n");
         print_prompt();
         return;
     }

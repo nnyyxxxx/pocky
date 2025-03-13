@@ -9,8 +9,7 @@
 #include "core/types.hpp"
 #include "drivers/keyboard.hpp"
 #include "editor.hpp"
-#include "fs/filesystem.hpp"
-#include "fs/users.hpp"
+#include "fs/fat32.hpp"
 #include "graphics.hpp"
 #include "io.hpp"
 #include "lib/lib.hpp"
@@ -64,6 +63,9 @@ pid_t shell_pid = 0;
 char command_history[MAX_HISTORY_SIZE][256] = {0};
 size_t history_count = 0;
 
+constexpr size_t MAX_PATH = 256;
+constexpr uint32_t ROOT_CLUSTER = 2;
+
 namespace {
 
 void split_path(const char* input, char* first, char* second) {
@@ -83,44 +85,40 @@ void split_path(const char* input, char* first, char* second) {
     strcpy(second, space);
 }
 
-void print_file_type(const fs::FileNode* node) {
-    if (node->type == fs::FileType::Directory)
-        printf("d");
-    else
-        printf("f");
-}
+void list_callback(const char* name, uint8_t attributes, uint32_t size) {
+    if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) return;
 
-void print_file_name(const fs::FileNode* node) {
-    printf(" ");
-    printf(node->name);
-    if (node->type == fs::FileType::Directory) printf("/");
-}
+    if (attributes & 0x10)
+        printf("d ");
+    else {
+        printf("f ");
+        if (size < 1024)
+            printf("(%u B) ", size);
+        else if (size < 1024 * 1024)
+            printf("(%u KB) ", size / 1024);
+        else
+            printf("(%u MB) ", size / (1024 * 1024));
+    }
 
-void list_callback(const fs::FileNode* node) {
-    print_file_type(node);
-    print_file_name(node);
-    printf("\n");
+    printf("%s\n", name);
 }
 
 template <typename F>
 void handle_wildcard_command(const char* pattern, F cmd_fn) {
-    auto& fs = fs::FileSystem::instance();
-    fs::FileNode* current = fs.get_current_directory();
-    fs::FileNode* child = current->first_child;
-    bool found = false;
+    auto& fs = fs::CFat32FileSystem::instance();
+    uint8_t buffer[1024];
+    fs.readFile(ROOT_CLUSTER, buffer, sizeof(buffer));
 
-    while (child) {
-        if (match_wildcard(pattern, child->name)) {
-            cmd_fn(child->name);
-            found = true;
-        }
-        child = child->next_sibling;
-    }
+    for (size_t i = 0; i < sizeof(buffer); i += 32) {
+        uint8_t* entry = &buffer[i];
+        if (entry[0] == 0x00) break;
+        if (entry[0] == 0xE5) continue;
 
-    if (!found) {
-        printf("No matches found for pattern: ");
-        printf(pattern);
-        printf("\n");
+        char name[13] = {0};
+        memcpy(name, entry, 11);
+        name[11] = '\0';
+
+        if (match_wildcard(pattern, name)) cmd_fn(name);
     }
 }
 
@@ -140,7 +138,6 @@ void cmd_help() {
                             "  mkdir    - Create a new directory\n"
                             "  cd       - Change current directory\n"
                             "  cat      - Display file contents\n"
-                            "  cp       - Copy a file\n"
                             "  mv       - Move or rename a file\n"
                             "  rm       - Remove a file or directory\n"
                             "  touch    - Create an empty file\n"
@@ -152,11 +149,6 @@ void cmd_help() {
                             "  ps       - List running processes\n"
                             "  pkill    - Kill a process\n"
                             "  ipctest  - Run IPC test\n"
-                            "  useradd  - Add a new user\n"
-                            "  userrm   - Remove a user\n"
-                            "  su       - Switch to a different user\n"
-                            "  whoami   - Show current user\n"
-                            "  userlist - List user accounts\n"
                             "  cores    - List CPU cores\n";
 
     pager::show_text(help_text);
@@ -247,12 +239,80 @@ void cmd_memory() {
     pm.terminate_process(pid);
 }
 
+void initialize_filesystem() {
+    auto& fs = fs::CFat32FileSystem::instance();
+    if (!fs.mount()) printf("Failed to mount filesystem\n");
+
+    uint32_t saved_cluster = fs.get_current_directory_cluster();
+    const char* saved_path = fs.get_current_path();
+    const char* saved_dir_name = fs.get_current_dir_name();
+
+    fs.set_current_path("/");
+    fs.set_current_dir_name("/");
+    fs.set_current_directory_cluster(ROOT_CLUSTER);
+
+    const char* default_dirs[] = {"etc", "tmp"};
+    for (const char* dir : default_dirs) {
+        uint32_t cluster, size;
+        uint8_t attributes;
+        if (!fs.findFile(dir, cluster, size, attributes)) fs.createDirectory(dir);
+    }
+
+    fs.set_current_path(saved_path);
+    fs.set_current_dir_name(saved_dir_name);
+    fs.set_current_directory_cluster(saved_cluster);
+}
+
 void cmd_ls(const char* path) {
     auto& pm = kernel::ProcessManager::instance();
     pid_t pid = pm.create_process("ls", shell_pid);
 
-    auto& fs = fs::FileSystem::instance();
-    fs.list_directory(path, list_callback);
+    auto& fs = fs::CFat32FileSystem::instance();
+    uint8_t buffer[1024];
+
+    uint32_t cluster = 0;
+    uint32_t size = 0;
+    uint8_t attributes = 0;
+
+    if (path && *path) {
+        if (!fs.findFile(path, cluster, size, attributes)) {
+            printf("Directory not found: %s\n", path);
+            pm.terminate_process(pid);
+            return;
+        }
+
+        if (!(attributes & 0x10)) {
+            printf("Not a directory: %s\n", path);
+            pm.terminate_process(pid);
+            return;
+        }
+    } else
+        cluster = fs.get_current_directory_cluster();
+
+    fs.readFile(cluster, buffer, sizeof(buffer));
+
+    for (size_t i = 0; i < sizeof(buffer); i += 32) {
+        uint8_t* entry = &buffer[i];
+        if (entry[0] == 0x00) break;
+        if (entry[0] == 0xE5) continue;
+
+        char name[13] = {0};
+        memcpy(name, entry, 11);
+
+        for (int j = 10; j >= 0; j--) {
+            if (name[j] == ' ')
+                name[j] = '\0';
+            else
+                break;
+        }
+
+        if (name[0] == '\0') continue;
+
+        uint8_t attributes = entry[11];
+        uint32_t size = (entry[28] | (entry[29] << 8) | (entry[30] << 16) | (entry[31] << 24));
+
+        list_callback(name, attributes, size);
+    }
 
     pm.terminate_process(pid);
 }
@@ -262,17 +322,12 @@ void cmd_mkdir(const char* path) {
     pid_t pid = pm.create_process("mkdir", shell_pid);
 
     if (!path || !*path) {
-        printf("mkdir: missing operand\n");
         pm.terminate_process(pid);
         return;
     }
 
-    auto& fs = fs::FileSystem::instance();
-    if (!fs.create_file(path, fs::FileType::Directory)) {
-        printf("mkdir: cannot create directory '");
-        printf(path);
-        printf("'\n");
-    }
+    auto& fs = fs::CFat32FileSystem::instance();
+    fs.createDirectory(path);
 
     pm.terminate_process(pid);
 }
@@ -281,18 +336,79 @@ void cmd_cd(const char* path) {
     auto& pm = kernel::ProcessManager::instance();
     pid_t pid = pm.create_process("cd", shell_pid);
 
-    auto& fs = fs::FileSystem::instance();
-
     if (!path || !*path) {
-        fs.change_directory("/");
+        auto& fs = fs::CFat32FileSystem::instance();
+        fs.set_current_path("/");
+        fs.set_current_dir_name("/");
+        fs.set_current_directory_cluster(ROOT_CLUSTER);
         pm.terminate_process(pid);
         return;
     }
 
-    if (!fs.change_directory(path)) {
-        printf("cd: cannot change directory to '");
-        printf(path);
-        printf("'\n");
+    auto& fs = fs::CFat32FileSystem::instance();
+
+    if (strcmp(path, "/") == 0) {
+        fs.set_current_path("/");
+        fs.set_current_dir_name("/");
+        fs.set_current_directory_cluster(ROOT_CLUSTER);
+        pm.terminate_process(pid);
+        return;
+    }
+
+    if (strcmp(path, "..") == 0) {
+        if (fs.pop_directory()) {
+            pm.terminate_process(pid);
+            return;
+        }
+
+        fs.set_current_path("/");
+        fs.set_current_dir_name("/");
+        fs.set_current_directory_cluster(ROOT_CLUSTER);
+        pm.terminate_process(pid);
+        return;
+    }
+
+    uint8_t buffer[1024];
+    uint32_t current_dir_cluster = fs.get_current_directory_cluster();
+    fs.readFile(current_dir_cluster, buffer, sizeof(buffer));
+
+    for (size_t i = 0; i < sizeof(buffer); i += 32) {
+        uint8_t* entry = &buffer[i];
+        if (entry[0] == 0x00) break;
+        if (entry[0] == 0xE5) continue;
+
+        char name[13] = {0};
+        memcpy(name, entry, 11);
+        name[11] = '\0';
+
+        for (int j = 10; j >= 0; j--) {
+            if (name[j] == ' ')
+                name[j] = '\0';
+            else
+                break;
+        }
+
+        if (strcmp(name, path) == 0) {
+            if (!(entry[11] & 0x10)) {
+                pm.terminate_process(pid);
+                return;
+            }
+
+            uint32_t dir_cluster = (entry[26] | (entry[27] << 8));
+
+            char new_path[MAX_PATH] = {0};
+            if (strcmp(fs.get_current_path(), "/") == 0)
+                snprintf(new_path, sizeof(new_path), "/%s", path);
+            else
+                snprintf(new_path, sizeof(new_path), "%s/%s", fs.get_current_path(), path);
+
+            fs.push_directory(path, new_path, dir_cluster);
+
+            fs.set_current_path(new_path);
+            fs.set_current_dir_name(path);
+            fs.set_current_directory_cluster(dir_cluster);
+            break;
+        }
     }
 
     pm.terminate_process(pid);
@@ -303,143 +419,63 @@ void cmd_cat(const char* path) {
     pid_t pid = pm.create_process("cat", shell_pid);
 
     if (!path || !*path) {
-        printf("cat: missing operand\n");
         pm.terminate_process(pid);
         return;
     }
 
-    if (strchr(path, '*')) {
-        handle_wildcard_command(path, [](const char* matched_path) {
-            auto& fs = fs::FileSystem::instance();
-            auto node = fs.get_file(matched_path);
-            if (!node || node->type != fs::FileType::Regular) return;
-
-            printf("==> ");
-            printf(matched_path);
-            printf(" <==\n");
-
-            uint8_t buffer[1024];
-            size_t remaining = node->size;
-            size_t offset = 0;
-
-            while (remaining > 0) {
-                size_t to_read = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
-                if (!fs.read_file(matched_path, buffer + offset, to_read)) break;
-
-                for (size_t i = 0; i < to_read; i++) {
-                    terminal_putchar(buffer[i]);
-                }
-
-                remaining -= to_read;
-                offset += to_read;
-            }
-            printf("\n\n");
-        });
-        pm.terminate_process(pid);
-        return;
-    }
-
-    auto& fs = fs::FileSystem::instance();
-    auto node = fs.get_file(path);
-    if (!node || node->type != fs::FileType::Regular) {
-        printf("cat: cannot read '");
-        printf(path);
-        printf("'\n");
-        pm.terminate_process(pid);
-        return;
-    }
-
+    auto& fs = fs::CFat32FileSystem::instance();
     uint8_t buffer[1024];
-    size_t remaining = node->size;
-    size_t offset = 0;
+    uint32_t current_dir_cluster = fs.get_current_directory_cluster();
+    fs.readFile(current_dir_cluster, buffer, sizeof(buffer));
 
-    while (remaining > 0) {
-        size_t to_read = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
-        if (!fs.read_file(path, buffer + offset, to_read)) break;
+    for (size_t i = 0; i < sizeof(buffer); i += 32) {
+        uint8_t* entry = &buffer[i];
+        if (entry[0] == 0x00) break;
+        if (entry[0] == 0xE5) continue;
 
-        for (size_t i = 0; i < to_read; i++) {
-            terminal_putchar(buffer[i]);
+        char name[13] = {0};
+        memcpy(name, entry, 11);
+        name[11] = '\0';
+
+        for (int j = 10; j >= 0; j--) {
+            if (name[j] == ' ')
+                name[j] = '\0';
+            else
+                break;
         }
 
-        remaining -= to_read;
-        offset += to_read;
-    }
-    printf("\n");
-
-    pm.terminate_process(pid);
-}
-
-void cmd_cp(const char* args) {
-    auto& pm = kernel::ProcessManager::instance();
-    pid_t pid = pm.create_process("cp", shell_pid);
-
-    char src[fs::MAX_PATH];
-    char dst[fs::MAX_PATH];
-    split_path(args, src, dst);
-
-    if (!*src || !*dst) {
-        set_red();
-        printf("cp: missing operand\n");
-        reset_color();
-        pm.terminate_process(pid);
-        return;
-    }
-
-    if (strchr(src, '*')) {
-        handle_wildcard_command(src, [dst](const char* matched_path) {
-            auto& fs = fs::FileSystem::instance();
-            auto src_node = fs.get_file(matched_path);
-            if (!src_node || src_node->type != fs::FileType::Regular) return;
-
-            char full_dst[fs::MAX_PATH];
-            strcpy(full_dst, dst);
-            if (dst[strlen(dst) - 1] == '/') strcat(full_dst, matched_path);
-
-            auto dst_node = fs.create_file(full_dst, fs::FileType::Regular);
-            if (!dst_node) {
-                set_red();
-                printf("cp: cannot create '%s'\n", full_dst);
-                reset_color();
+        if (strcmp(name, path) == 0) {
+            if (entry[11] & 0x10) {
+                pm.terminate_process(pid);
                 return;
             }
 
-            if (!fs.write_file(full_dst, src_node->data, src_node->size)) {
-                set_red();
-                printf("cp: write error\n");
-                reset_color();
-                fs.delete_file(full_dst);
+            uint32_t cluster = (entry[26] | (entry[27] << 8));
+            uint32_t size = (entry[28] | (entry[29] << 8) | (entry[30] << 16) | (entry[31] << 24));
+
+            if (size == 0) {
+                pm.terminate_process(pid);
+                return;
             }
-        });
-        pm.terminate_process(pid);
-        return;
+
+            uint8_t* content = new uint8_t[size];
+            fs.readFile(cluster, content, size);
+
+            for (size_t j = 0; j < size; j++) {
+                if (content[j] == '\n')
+                    terminal_putchar('\n');
+                else if (content[j] >= 32 && content[j] <= 126)
+                    terminal_putchar(content[j]);
+                else
+                    terminal_putchar('.');
+            }
+
+            delete[] content;
+            break;
+        }
     }
 
-    auto& fs = fs::FileSystem::instance();
-    auto src_node = fs.get_file(src);
-    if (!src_node || src_node->type != fs::FileType::Regular) {
-        set_red();
-        printf("cp: cannot read '%s'\n", src);
-        reset_color();
-        pm.terminate_process(pid);
-        return;
-    }
-
-    auto dst_node = fs.create_file(dst, fs::FileType::Regular);
-    if (!dst_node) {
-        set_red();
-        printf("cp: cannot create '%s'\n", dst);
-        reset_color();
-        pm.terminate_process(pid);
-        return;
-    }
-
-    if (!fs.write_file(dst, src_node->data, src_node->size)) {
-        set_red();
-        printf("cp: write error\n");
-        reset_color();
-        fs.delete_file(dst);
-    }
-
+    printf("\n");
     pm.terminate_process(pid);
 }
 
@@ -447,67 +483,17 @@ void cmd_mv(const char* args) {
     auto& pm = kernel::ProcessManager::instance();
     pid_t pid = pm.create_process("mv", shell_pid);
 
-    char src[fs::MAX_PATH];
-    char dst[fs::MAX_PATH];
+    char src[MAX_PATH];
+    char dst[MAX_PATH];
     split_path(args, src, dst);
 
     if (!*src || !*dst) {
-        printf("mv: missing operand\n");
         pm.terminate_process(pid);
         return;
     }
 
-    if (strchr(src, '*')) {
-        handle_wildcard_command(src, [dst](const char* matched_path) {
-            auto& fs = fs::FileSystem::instance();
-            auto src_node = fs.get_file(matched_path);
-            if (!src_node) return;
-
-            char full_dst[fs::MAX_PATH];
-            strcpy(full_dst, dst);
-            if (dst[strlen(dst) - 1] == '/') strcat(full_dst, matched_path);
-
-            if (src_node->type == fs::FileType::Regular) {
-                auto dst_node = fs.create_file(full_dst, fs::FileType::Regular);
-                if (!dst_node) {
-                    printf("mv: cannot create '");
-                    printf(full_dst);
-                    printf("'\n");
-                    return;
-                }
-
-                if (!fs.write_file(full_dst, src_node->data, src_node->size)) {
-                    printf("mv: write error\n");
-                    fs.delete_file(full_dst);
-                    return;
-                }
-
-                fs.delete_file(matched_path);
-            }
-        });
-        pm.terminate_process(pid);
-        return;
-    }
-
-    auto& fs = fs::FileSystem::instance();
-    auto src_node = fs.get_file(src);
-    if (!src_node) {
-        printf("mv: cannot stat '");
-        printf(src);
-        printf("'\n");
-        pm.terminate_process(pid);
-        return;
-    }
-
-    if (src_node->type == fs::FileType::Regular) {
-        cmd_cp(args);
-        if (!fs.delete_file(src)) {
-            printf("mv: cannot remove '");
-            printf(src);
-            printf("'\n");
-        }
-    } else
-        printf("mv: directory move not supported\n");
+    auto& fs = fs::CFat32FileSystem::instance();
+    fs.renameFile(src, dst);
 
     pm.terminate_process(pid);
 }
@@ -517,30 +503,38 @@ void cmd_rm(const char* path) {
     pid_t pid = pm.create_process("rm", shell_pid);
 
     if (!path || !*path) {
-        printf("rm: missing operand\n");
         pm.terminate_process(pid);
         return;
     }
 
     if (strchr(path, '*')) {
-        handle_wildcard_command(path, [](const char* matched_path) {
-            auto& fs = fs::FileSystem::instance();
-            if (!fs.delete_file(matched_path)) {
-                printf("rm: cannot remove '");
-                printf(matched_path);
-                printf("'\n");
+        handle_wildcard_command(path, [](const char* name) {
+            auto& fs = fs::CFat32FileSystem::instance();
+            uint32_t cluster, size;
+            uint8_t attributes;
+            if (fs.findFile(name, cluster, size, attributes)) {
+                if (attributes & 0x10)
+                    fs.deleteDirectory(name);
+                else
+                    fs.deleteFile(name);
             }
         });
         pm.terminate_process(pid);
         return;
     }
 
-    auto& fs = fs::FileSystem::instance();
-    if (!fs.delete_file(path)) {
-        printf("rm: cannot remove '");
-        printf(path);
-        printf("'\n");
+    auto& fs = fs::CFat32FileSystem::instance();
+    uint32_t cluster, size;
+    uint8_t attributes;
+    if (!fs.findFile(path, cluster, size, attributes)) {
+        pm.terminate_process(pid);
+        return;
     }
+
+    if (attributes & 0x10)
+        fs.deleteDirectory(path);
+    else
+        fs.deleteFile(path);
 
     pm.terminate_process(pid);
 }
@@ -549,20 +543,14 @@ void cmd_touch(const char* path) {
     auto& pm = kernel::ProcessManager::instance();
     pid_t pid = pm.create_process("touch", shell_pid);
 
-    if (!path) {
-        printf("Usage: touch <path>\n");
+    if (!path || !*path) {
+        printf("touch: missing operand\n");
         pm.terminate_process(pid);
         return;
     }
 
-    auto& fs = fs::FileSystem::instance();
-    auto* file = fs.create_file(path, fs::FileType::Regular);
-
-    if (!file) {
-        printf("Failed to create file: ");
-        printf(path);
-        printf("\n");
-    }
+    auto& fs = fs::CFat32FileSystem::instance();
+    fs.createFile(path, 0x20);
 
     pm.terminate_process(pid);
 }
@@ -710,29 +698,42 @@ void cmd_less(const char* path) {
         return;
     }
 
-    auto& fs = fs::FileSystem::instance();
-    auto* file = fs.get_file(path);
-    if (!file || file->type != fs::FileType::Regular) {
-        printf("less: cannot read '");
-        printf(path);
-        printf("'\n");
-        pm.terminate_process(pid);
-        return;
+    auto& fs = fs::CFat32FileSystem::instance();
+    uint8_t buffer[1024];
+    fs.readFile(ROOT_CLUSTER, buffer, sizeof(buffer));
+
+    bool found = false;
+    for (size_t i = 0; i < sizeof(buffer); i += 32) {
+        uint8_t* entry = &buffer[i];
+        if (entry[0] == 0x00) break;
+        if (entry[0] == 0xE5) continue;
+
+        char name[13] = {0};
+        memcpy(name, entry, 11);
+        name[11] = '\0';
+
+        if (strcmp(name, path) == 0) {
+            found = true;
+            uint32_t cluster = (entry[26] | (entry[27] << 8));
+            uint32_t size = (entry[28] | (entry[29] << 8) | (entry[30] << 16) | (entry[31] << 24));
+
+            char* text = new char[size + 1];
+            if (!text) {
+                printf("less: memory allocation failed\n");
+                pm.terminate_process(pid);
+                return;
+            }
+
+            fs.readFile(cluster, reinterpret_cast<uint8_t*>(text), size);
+            text[size] = '\0';
+            pager::show_text(text);
+            delete[] text;
+            break;
+        }
     }
 
-    char* text = new char[file->size + 1];
-    if (!text) {
-        printf("less: memory allocation failed\n");
-        pm.terminate_process(pid);
-        return;
-    }
+    if (!found) printf("less: cannot read '%s': No such file\n", path);
 
-    fs.read_file(path, reinterpret_cast<uint8_t*>(text), file->size);
-    text[file->size] = '\0';
-
-    pager::show_text(text);
-
-    delete[] text;
     pm.terminate_process(pid);
 }
 
@@ -755,7 +756,7 @@ void handle_redirection(const char* command) {
     if (!redirect) return;
 
     char text[256] = {0};
-    char filename[fs::MAX_PATH] = {0};
+    char filename[MAX_PATH] = {0};
 
     size_t text_len = redirect - command;
     strncpy(text, command, text_len);
@@ -774,52 +775,59 @@ void handle_redirection(const char* command) {
         return;
     }
 
-    auto& fs = fs::FileSystem::instance();
-    auto* file = fs.create_file(filename, fs::FileType::Regular);
-    if (!file) {
-        printf("Failed to create file: ");
-        printf(filename);
-        printf("\n");
-        return;
-    }
-
-    char* text_end = text + strlen(text) - 1;
-    while (text_end > text && *text_end == ' ')
-        *text_end-- = '\0';
-
+    auto& fs = fs::CFat32FileSystem::instance();
     const uint8_t* data = reinterpret_cast<const uint8_t*>(text);
-    fs.write_file(filename, data, strlen(text));
+    fs.writeFile(ROOT_CLUSTER, data, strlen(text));
 
     memset(input_buffer, 0, sizeof(input_buffer));
     input_pos = 0;
 }
 
-void print_prompt() {
-    auto& fs = fs::FileSystem::instance();
-    const char* current_path = fs.get_current_path();
-    char dir_name[256];
+const char* get_dir_name(const char* path) {
+    static char buffer[MAX_PATH];
 
-    if (strcmp(current_path, "/") == 0)
-        strcpy(dir_name, "/");
-    else {
-        const char* last_slash = strrchr(current_path, '/');
-        if (last_slash)
-            strcpy(dir_name, last_slash + 1);
-        else
-            strcpy(dir_name, current_path);
+    if (!path || !*path) {
+        strcpy(buffer, "/");
+        return buffer;
     }
 
-    auto& user_manager = fs::CUserManager::instance();
-    const char* username = user_manager.get_current_username();
+    if (strcmp(path, "/") == 0) {
+        strcpy(buffer, "/");
+        return buffer;
+    }
+
+    strncpy(buffer, path, MAX_PATH - 1);
+    buffer[MAX_PATH - 1] = '\0';
+
+    size_t len = strlen(buffer);
+    if (len > 1 && buffer[len - 1] == '/') buffer[len - 1] = '\0';
+
+    char* last_slash = strrchr(buffer, '/');
+    if (!last_slash) return buffer;
+
+    if (last_slash == buffer) return last_slash + 1;
+
+    return last_slash + 1;
+}
+
+void print_prompt() {
+    auto& fs = fs::CFat32FileSystem::instance();
+    const char* dir_name = fs.get_current_dir_name();
+
+    if (!dir_name || !*dir_name) {
+        fs.set_current_dir_name("/");
+        dir_name = "/";
+    }
 
     set_white();
     printf("[");
     set_gray();
-    printf("%s", username);
+    printf("root");
     set_white();
     printf("@");
     set_gray();
     printf("kernel");
+    set_white();
     printf(" ");
     set_gray();
     printf("%s", dir_name);
@@ -846,23 +854,28 @@ void handle_tab_completion() {
     } else
         strcpy(command, input_buffer);
 
-    auto& fs = fs::FileSystem::instance();
-    fs::FileNode* current = fs.get_current_directory();
-    fs::FileNode* child = current->first_child;
+    auto& fs = fs::CFat32FileSystem::instance();
+    uint8_t buffer[1024];
+    fs.readFile(ROOT_CLUSTER, buffer, sizeof(buffer));
 
     const char* match = nullptr;
     size_t matches = 0;
 
-    while (child) {
-        if (strncmp(child->name, last_word, word_len) == 0) {
-            if (strcmp(command, "cd") == 0 && child->type != fs::FileType::Directory) {
-                child = child->next_sibling;
-                continue;
-            }
-            match = child->name;
+    for (size_t i = 0; i < sizeof(buffer); i += 32) {
+        uint8_t* entry = &buffer[i];
+        if (entry[0] == 0x00) break;
+        if (entry[0] == 0xE5) continue;
+
+        char name[13] = {0};
+        memcpy(name, entry, 11);
+        name[11] = '\0';
+
+        if (strncmp(name, last_word, word_len) == 0) {
+            bool isDirectory = (entry[11] & 0x10) != 0;
+            if (strcmp(command, "cd") == 0 && !isDirectory) continue;
+            match = name;
             matches++;
         }
-        child = child->next_sibling;
     }
 
     if (matches == 1) {
@@ -965,8 +978,6 @@ void process_command() {
         cmd_cd(args);
     else if (strcmp(cmd, "cat") == 0)
         cmd_cat(args);
-    else if (strcmp(cmd, "cp") == 0)
-        cmd_cp(args);
     else if (strcmp(cmd, "mv") == 0)
         cmd_mv(args);
     else if (strcmp(cmd, "rm") == 0)
@@ -1003,16 +1014,6 @@ void process_command() {
         cmd_less(args);
     else if (strcmp(cmd, "ipctest") == 0)
         cmd_ipc_test();
-    else if (strcmp(cmd, "useradd") == 0)
-        cmd_useradd(args);
-    else if (strcmp(cmd, "userrm") == 0)
-        cmd_userrm(args);
-    else if (strcmp(cmd, "su") == 0)
-        cmd_su(args);
-    else if (strcmp(cmd, "whoami") == 0)
-        cmd_whoami();
-    else if (strcmp(cmd, "userlist") == 0)
-        cmd_userlist();
     else if (strcmp(cmd, "cores") == 0)
         cmd_cores();
     else {
@@ -1039,6 +1040,13 @@ void init_shell() {
     pager::init_pager();
 
     screen_state::init();
+
+    initialize_filesystem();
+
+    auto& fs = fs::CFat32FileSystem::instance();
+    fs.set_current_path("/");
+    fs.set_current_dir_name("/");
+    fs.set_current_directory_cluster(ROOT_CLUSTER);
 
     printf("\n");
     print_prompt();
@@ -1133,124 +1141,6 @@ void cmd_ipc_test() {
 
     printf("IPC test completed successfully!\n");
     pm.terminate_process(test_pid);
-}
-
-void cmd_useradd(const char* args) {
-    if (!args || args[0] == '\0') {
-        printf("useradd: missing arguments\n");
-        printf("Usage: useradd <username> <password>\n");
-        return;
-    }
-
-    char username[fs::MAX_USERNAME] = {0};
-    char password[fs::MAX_PASSWORD] = {0};
-
-    size_t arg_len = strlen(args);
-    size_t i = 0;
-
-    size_t username_len = 0;
-    while (i < arg_len && args[i] != ' ' && username_len < fs::MAX_USERNAME - 1) {
-        username[username_len++] = args[i++];
-    }
-    username[username_len] = '\0';
-
-    while (i < arg_len && args[i] == ' ')
-        i++;
-
-    size_t password_len = 0;
-    while (i < arg_len && password_len < fs::MAX_PASSWORD - 1) {
-        password[password_len++] = args[i++];
-    }
-    password[password_len] = '\0';
-
-    if (username_len == 0) {
-        printf("useradd: missing username\n");
-        return;
-    }
-
-    if (password_len == 0) {
-        printf("useradd: missing password\n");
-        return;
-    }
-
-    auto& user_manager = fs::CUserManager::instance();
-    if (user_manager.add_user(username, password))
-        printf("User '%s' created successfully\n", username);
-    else
-        printf("Failed to create user '%s'\n", username);
-}
-
-void cmd_userrm(const char* args) {
-    if (!args || args[0] == '\0') {
-        printf("userrm: missing username\n");
-        printf("Usage: userrm <username>\n");
-        return;
-    }
-
-    auto& user_manager = fs::CUserManager::instance();
-    if (user_manager.remove_user(args))
-        printf("User '%s' removed successfully\n", args);
-    else
-        printf("Failed to remove user '%s'\n", args);
-}
-
-void cmd_su(const char* args) {
-    if (!args || args[0] == '\0') {
-        printf("su: missing username\n");
-        printf("Usage: su <username> <password>\n");
-        return;
-    }
-
-    char username[fs::MAX_USERNAME] = {0};
-    char password[fs::MAX_PASSWORD] = {0};
-
-    size_t arg_len = strlen(args);
-    size_t i = 0;
-
-    size_t username_len = 0;
-    while (i < arg_len && args[i] != ' ' && username_len < fs::MAX_USERNAME - 1) {
-        username[username_len++] = args[i++];
-    }
-    username[username_len] = '\0';
-
-    while (i < arg_len && args[i] == ' ')
-        i++;
-
-    size_t password_len = 0;
-    while (i < arg_len && password_len < fs::MAX_PASSWORD - 1) {
-        password[password_len++] = args[i++];
-    }
-    password[password_len] = '\0';
-
-    if (username_len == 0) {
-        printf("su: missing username\n");
-        return;
-    }
-
-    if (password_len == 0) {
-        printf("su: missing password\n");
-        return;
-    }
-
-    auto& user_manager = fs::CUserManager::instance();
-    if (user_manager.switch_user(username, password))
-        printf("Switched to user '%s'\n", username);
-    else
-        printf("Authentication failed for user '%s'\n", username);
-}
-
-void cmd_whoami() {
-    auto& user_manager = fs::CUserManager::instance();
-    printf("%s\n", user_manager.get_current_username());
-}
-
-void cmd_userlist() {
-    auto& user_manager = fs::CUserManager::instance();
-
-    printf("User accounts:\n");
-    user_manager.list_users([](const char* username, uint32_t uid, uint32_t gid) {
-        printf("  %s (UID: %d, GID: %d)\n", username, uid, gid);
-    });
 }
 
 void cmd_cores() {

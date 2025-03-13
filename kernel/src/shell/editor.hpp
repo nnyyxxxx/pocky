@@ -4,7 +4,7 @@
 
 namespace editor {
 
-constexpr size_t MAX_BUFFER_SIZE = 16384;
+constexpr size_t MAX_BUFFER_SIZE = 32768;
 constexpr size_t MAX_FILENAME_LENGTH = 256;
 
 enum class EditorMode { NORMAL, INSERT };
@@ -41,6 +41,8 @@ private:
     void update_screen_position();
     void display_status_line();
     void update_cursor();
+    size_t get_line_length(size_t row) const;
+    void update_cursor_pos();
 
     void process_normal_mode(char c);
     void process_insert_mode(char c);

@@ -7,17 +7,13 @@ namespace kernel {
 using mode_t = uint32_t;
 using off_t = int64_t;
 using pid_t = int32_t;
-using uid_t = uint32_t;
-using gid_t = uint32_t;
 
 struct stat {
     uint64_t st_dev;
     uint64_t st_ino;
     mode_t st_mode;
     uint32_t st_nlink;
-    uid_t st_uid;
-    gid_t st_gid;
-    uint64_t st_rdev;
+    uint32_t st_rdev;
     off_t st_size;
     uint32_t st_blksize;
     uint32_t st_blocks;

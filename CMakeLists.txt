@@ -30,6 +30,7 @@ set(KERNEL_CPP_SRCS
     ${KERNEL_SRC}/shell/terminal.cpp
     ${KERNEL_SRC}/drivers/keyboard.cpp
     ${KERNEL_SRC}/drivers/mouse.cpp
+    ${KERNEL_SRC}/drivers/ata.cpp
     ${KERNEL_SRC}/hw/pic.cpp
     ${KERNEL_SRC}/shell/shell.cpp
     ${KERNEL_SRC}/hw/gdt.cpp
@@ -43,8 +44,7 @@ set(KERNEL_CPP_SRCS
     ${KERNEL_SRC}/core/elf.cpp
     ${KERNEL_SRC}/core/dynamic_linker.cpp
     ${KERNEL_SRC}/lib/printf.cpp
-    ${KERNEL_SRC}/fs/filesystem.cpp
-    ${KERNEL_SRC}/fs/users.cpp
+    ${KERNEL_SRC}/fs/fat32.cpp
     ${KERNEL_SRC}/hw/timer.cpp
     ${KERNEL_SRC}/shell/editor.cpp
     ${KERNEL_SRC}/core/multiboot2.cpp

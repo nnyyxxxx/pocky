@@ -267,33 +267,56 @@ void clear_screen(uint8_t color) {
 }
 
 void save_cursor_background(int32_t x, int32_t y) {
+    if (x < -15 || y < -15 || x >= GRAPHICS_WIDTH || y >= GRAPHICS_HEIGHT) return;
+
     for (int i = 0; i < 16; i++) {
         for (int j = 0; j < 16; j++) {
-            if (x + j >= 0 && y + i >= 0 && x + j < GRAPHICS_WIDTH && y + i < GRAPHICS_HEIGHT)
-                cursor_backup[i][j] = vga_framebuffer[(y + i) * GRAPHICS_WIDTH + (x + j)];
+            int32_t screen_x = x + j;
+            int32_t screen_y = y + i;
+
+            if (screen_x >= 0 && screen_y >= 0 && screen_x < GRAPHICS_WIDTH &&
+                screen_y < GRAPHICS_HEIGHT) {
+                cursor_backup[i][j] = vga_framebuffer[screen_y * GRAPHICS_WIDTH + screen_x];
+            } else
+                cursor_backup[i][j] = 0;
         }
     }
 }
 
 void restore_cursor_background(int32_t x, int32_t y) {
+    if (x < -15 || y < -15 || x >= GRAPHICS_WIDTH || y >= GRAPHICS_HEIGHT) return;
+
     for (int i = 0; i < 16; i++) {
         for (int j = 0; j < 16; j++) {
-            if (x + j >= 0 && y + i >= 0 && x + j < GRAPHICS_WIDTH && y + i < GRAPHICS_HEIGHT)
-                vga_framebuffer[(y + i) * GRAPHICS_WIDTH + (x + j)] = cursor_backup[i][j];
+            int32_t screen_x = x + j;
+            int32_t screen_y = y + i;
+
+            if (screen_x >= 0 && screen_y >= 0 && screen_x < GRAPHICS_WIDTH &&
+                screen_y < GRAPHICS_HEIGHT) {
+                vga_framebuffer[screen_y * GRAPHICS_WIDTH + screen_x] = cursor_backup[i][j];
+            }
         }
     }
 }
 
 void render_mouse_cursor(int32_t x, int32_t y) {
-    if (cursor_x != -1 && cursor_y != -1) restore_cursor_background(cursor_x, cursor_y);
+    if (x < -15 || y < -15 || x >= GRAPHICS_WIDTH || y >= GRAPHICS_HEIGHT) return;
+
+    if (cursor_x >= 0 && cursor_x < GRAPHICS_WIDTH && cursor_y >= 0 && cursor_y < GRAPHICS_HEIGHT) {
+        restore_cursor_background(cursor_x, cursor_y);
+    }
 
     save_cursor_background(x, y);
 
     for (int i = 0; i < 16; i++) {
         for (int j = 0; j < 16; j++) {
-            if (cursor_bitmap[i][j] != 0 && x + j >= 0 && y + i >= 0 && x + j < GRAPHICS_WIDTH &&
-                y + i < GRAPHICS_HEIGHT)
-                vga_framebuffer[(y + i) * GRAPHICS_WIDTH + (x + j)] = cursor_bitmap[i][j];
+            int32_t screen_x = x + j;
+            int32_t screen_y = y + i;
+
+            if (cursor_bitmap[i][j] != 0 && screen_x >= 0 && screen_y >= 0 &&
+                screen_x < GRAPHICS_WIDTH && screen_y < GRAPHICS_HEIGHT) {
+                vga_framebuffer[screen_y * GRAPHICS_WIDTH + screen_x] = cursor_bitmap[i][j];
+            }
         }
     }
 
@@ -372,7 +395,15 @@ void enter_graphics_mode() {
     if (current_process) scheduler.set_process_priority(current_process->pid, 10);
 
     MouseState lastMouseState = get_mouse_state();
-    render_mouse_cursor(lastMouseState.x, lastMouseState.y);
+
+    if (lastMouseState.x >= 0 && lastMouseState.x < GRAPHICS_WIDTH && lastMouseState.y >= 0 &&
+        lastMouseState.y < GRAPHICS_HEIGHT)
+        render_mouse_cursor(lastMouseState.x, lastMouseState.y);
+    else {
+        lastMouseState.x = GRAPHICS_WIDTH / 2;
+        lastMouseState.y = GRAPHICS_HEIGHT / 2;
+        render_mouse_cursor(lastMouseState.x, lastMouseState.y);
+    }
 
     RTCTime lastTime = time;
 
@@ -389,28 +420,44 @@ void enter_graphics_mode() {
 
         MouseState currentMouse = get_mouse_state();
 
+        if (currentMouse.x < 0) currentMouse.x = 0;
+        if (currentMouse.y < 0) currentMouse.y = 0;
+        if (currentMouse.x >= GRAPHICS_WIDTH) currentMouse.x = GRAPHICS_WIDTH - 1;
+        if (currentMouse.y >= GRAPHICS_HEIGHT) currentMouse.y = GRAPHICS_HEIGHT - 1;
+
         if (currentMouse.x != lastMouseState.x || currentMouse.y != lastMouseState.y ||
             currentMouse.left_button != lastMouseState.left_button ||
             currentMouse.right_button != lastMouseState.right_button ||
             currentMouse.middle_button != lastMouseState.middle_button) {
             if (currentMouse.x != lastMouseState.x || currentMouse.y != lastMouseState.y) {
-                if (cursor_x != -1 && cursor_y != -1) restore_cursor_background(cursor_x, cursor_y);
-
-                save_cursor_background(currentMouse.x, currentMouse.y);
-
-                for (int i = 0; i < 16; i++) {
-                    for (int j = 0; j < 16; j++) {
-                        if (cursor_bitmap[i][j] != 0 && currentMouse.x + j >= 0 &&
-                            currentMouse.y + i >= 0 && currentMouse.x + j < GRAPHICS_WIDTH &&
-                            currentMouse.y + i < GRAPHICS_HEIGHT) {
-                            vga_framebuffer[(currentMouse.y + i) * GRAPHICS_WIDTH +
-                                            (currentMouse.x + j)] = cursor_bitmap[i][j];
-                        }
-                    }
+                if (cursor_x >= 0 && cursor_x < GRAPHICS_WIDTH && cursor_y >= 0 &&
+                    cursor_y < GRAPHICS_HEIGHT) {
+                    restore_cursor_background(cursor_x, cursor_y);
                 }
 
-                cursor_x = currentMouse.x;
-                cursor_y = currentMouse.y;
+                if (currentMouse.x >= 0 && currentMouse.x < GRAPHICS_WIDTH && currentMouse.y >= 0 &&
+                    currentMouse.y < GRAPHICS_HEIGHT) {
+                    save_cursor_background(currentMouse.x, currentMouse.y);
+
+                    for (int i = 0; i < 16; i++) {
+                        for (int j = 0; j < 16; j++) {
+                            if (cursor_bitmap[i][j] != 0 && currentMouse.x + j >= 0 &&
+                                currentMouse.y + i >= 0 && currentMouse.x + j < GRAPHICS_WIDTH &&
+                                currentMouse.y + i < GRAPHICS_HEIGHT) {
+                                vga_framebuffer[(currentMouse.y + i) * GRAPHICS_WIDTH +
+                                                (currentMouse.x + j)] = cursor_bitmap[i][j];
+                            }
+                        }
+                    }
+
+                    cursor_x = currentMouse.x;
+                    cursor_y = currentMouse.y;
+                } else {
+                    currentMouse.x = GRAPHICS_WIDTH / 2;
+                    currentMouse.y = GRAPHICS_HEIGHT / 2;
+                    cursor_x = currentMouse.x;
+                    cursor_y = currentMouse.y;
+                }
             }
 
             lastMouseState = currentMouse;
