@@ -41,7 +41,7 @@ void mouse_write(uint8_t cmd) {
     outb(MOUSE_DATA_PORT, cmd);
 
     uint8_t ack = mouse_read();
-    if (ack != 0xFA) printf("Mouse command failed: ");
+    if (ack != 0xFA) printf("Mouse command failed: %x\n", ack);
 }
 
 }  // namespace
@@ -123,17 +123,33 @@ void init_mouse() {
     mouse_wait_input();
     outb(MOUSE_DATA_PORT, status);
 
-    mouse_write(MOUSE_CMD_RESET);
-    mouse_read();
+    mouse_wait_input();
+    outb(MOUSE_COMMAND_PORT, 0xD4);
+    mouse_wait_input();
+    outb(MOUSE_DATA_PORT, MOUSE_CMD_RESET);
+
+    uint8_t first_response = mouse_read();
+
+    if (first_response == 0xFA) {
+        uint8_t self_test = mouse_read();
+        if (self_test != 0xAA) {
+            printf("Mouse self-test failed: %x\n", self_test);
+            return;
+        }
+
+        mouse_read();
+    } else if (first_response == 0xAA)
+        mouse_read();
+    else {
+        printf("Mouse reset failed: %x\n", first_response);
+        return;
+    }
 
     mouse_write(MOUSE_CMD_SET_DEFAULTS);
-
     mouse_write(MOUSE_CMD_SET_SAMPLE_RATE);
     mouse_write(200);
-
     mouse_write(MOUSE_CMD_SET_RESOLUTION);
     mouse_write(3);
-
     mouse_write(MOUSE_CMD_ENABLE_STREAMING);
 
     current_mouse_state.x = GRAPHICS_WIDTH / 2;
@@ -151,6 +167,7 @@ void init_mouse() {
     outb(PIC2_DATA, inb(PIC2_DATA) & ~(1 << 4));
 
     mouse_initialized = true;
+    printf("Mouse initialized successfully\n");
 }
 
 MouseState get_mouse_state() {

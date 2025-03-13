@@ -2,7 +2,7 @@
 
 #include <cstring>
 
-#include "fs/filesystem.hpp"
+#include "fs/fat32.hpp"
 #include "memory/heap.hpp"
 #include "memory/physical_memory.hpp"
 #include "memory/virtual_memory.hpp"
@@ -127,16 +127,25 @@ Process* ProcessManager::get_process(pid_t pid) {
 }
 
 bool ProcessManager::load_program(Process* process, const char* path) {
-    auto& fs = fs::FileSystem::instance();
-    auto* file = fs.get_file(path);
-    if (!file) return false;
+    auto& fs = fs::CFat32FileSystem::instance();
+    uint32_t cluster, size;
+    uint8_t attributes;
+    if (!fs.findFile(path, cluster, size, attributes)) return false;
 
-    auto* elf_header = reinterpret_cast<const Elf64_Ehdr*>(file->data);
-    if (!ElfLoader::validate_elf_header(elf_header)) return false;
+    if (attributes & 0x10) return false;
+
+    uint8_t* file_data = new uint8_t[size];
+    fs.readFile(cluster, file_data, size);
+
+    auto* elf_header = reinterpret_cast<const Elf64_Ehdr*>(file_data);
+    if (!ElfLoader::validate_elf_header(elf_header)) {
+        delete[] file_data;
+        return false;
+    }
 
     process->entry_point = elf_header->e_entry;
 
-    auto* phdr = reinterpret_cast<const Elf64_Phdr*>(file->data + elf_header->e_phoff);
+    auto* phdr = reinterpret_cast<const Elf64_Phdr*>(file_data + elf_header->e_phoff);
     auto& vmm = VirtualMemoryManager::instance();
     auto& pmm = PhysicalMemoryManager::instance();
 
@@ -153,12 +162,13 @@ bool ProcessManager::load_program(Process* process, const char* path) {
             uintptr_t phys_page = reinterpret_cast<uintptr_t>(pmm.allocate_frame());
             if (phys_page == 0) {
                 cleanup_process_memory(process);
+                delete[] file_data;
                 return false;
             }
             vmm.map_page(addr, phys_page, (phdr[i].p_flags & PF_W) != 0);
         }
 
-        memcpy(reinterpret_cast<void*>(phdr[i].p_vaddr), file->data + phdr[i].p_offset,
+        memcpy(reinterpret_cast<void*>(phdr[i].p_vaddr), file_data + phdr[i].p_offset,
                phdr[i].p_filesz);
 
         if (phdr[i].p_memsz > phdr[i].p_filesz) {
@@ -174,6 +184,7 @@ bool ProcessManager::load_program(Process* process, const char* path) {
 
     process->program_break = process->brk = highest_addr;
 
+    delete[] file_data;
     return true;
 }
 

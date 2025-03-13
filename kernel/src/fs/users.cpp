@@ -3,7 +3,7 @@
 #include <cstdio>
 #include <cstring>
 
-#include "filesystem.hpp"
+#include "fat32.hpp"
 
 namespace fs {
 
@@ -17,10 +17,10 @@ CUserManager::CUserManager() : m_user_count(0), m_current_user_index(0), m_initi
 bool CUserManager::initialize() {
     if (m_initialized) return true;
 
-    auto& fs = FileSystem::instance();
+    auto& fs = CFat32FileSystem::instance();
 
-    fs.create_file("/home", FileType::Directory);
-    fs.create_file("/etc", FileType::Directory);
+    uint8_t empty[0];
+    fs.writeFile(ROOT_CLUSTER, empty, 0);
 
     if (!add_user("root", "root")) return false;
 
@@ -80,7 +80,7 @@ bool CUserManager::switch_user(const char* username, const char* password) {
 
     m_current_user_index = user - m_users;
 
-    auto& fs = FileSystem::instance();
+    auto& fs = CFat32FileSystem::instance();
     char home_path[MAX_PATH];
 
     if (strcmp(user->username, "root") == 0)
@@ -90,7 +90,7 @@ bool CUserManager::switch_user(const char* username, const char* password) {
         strcat(home_path, user->username);
     }
 
-    fs.change_directory(home_path);
+    fs.set_current_path(home_path);
 
     return true;
 }
@@ -118,7 +118,7 @@ bool CUserManager::user_exists(const char* username) const {
 }
 
 bool CUserManager::save_user_data() {
-    auto& fs = FileSystem::instance();
+    auto& fs = CFat32FileSystem::instance();
 
     size_t total_size = sizeof(size_t) + sizeof(SUserInfo) * m_user_count;
     uint8_t* data = new uint8_t[total_size];
@@ -129,37 +129,26 @@ bool CUserManager::save_user_data() {
         memcpy(data + sizeof(size_t) + i * sizeof(SUserInfo), &m_users[i], sizeof(SUserInfo));
     }
 
-    bool result = fs.write_file("/etc/passwd", data, total_size);
+    fs.writeFile(ROOT_CLUSTER, data, total_size);
 
     delete[] data;
-    return result;
+    return true;
 }
 
 bool CUserManager::load_user_data() {
-    auto& fs = FileSystem::instance();
+    auto& fs = CFat32FileSystem::instance();
 
-    FileNode* passwd_file = fs.get_file("/etc/passwd");
-    if (!passwd_file || passwd_file->type != FileType::Regular) return false;
+    uint8_t buffer[1024];
+    fs.readFile(ROOT_CLUSTER, buffer, sizeof(buffer));
 
-    uint8_t* data = new uint8_t[passwd_file->size];
-    if (!fs.read_file("/etc/passwd", data, passwd_file->size)) {
-        delete[] data;
-        return false;
-    }
-
-    size_t stored_user_count = *reinterpret_cast<size_t*>(data);
-    if (stored_user_count > MAX_USERS) {
-        delete[] data;
-        return false;
-    }
+    size_t stored_user_count = *reinterpret_cast<size_t*>(buffer);
+    if (stored_user_count > MAX_USERS) return false;
 
     for (size_t i = 0; i < stored_user_count; ++i) {
-        memcpy(&m_users[i], data + sizeof(size_t) + i * sizeof(SUserInfo), sizeof(SUserInfo));
+        memcpy(&m_users[i], buffer + sizeof(size_t) + i * sizeof(SUserInfo), sizeof(SUserInfo));
     }
 
     m_user_count = stored_user_count;
-
-    delete[] data;
     return true;
 }
 
@@ -179,23 +168,11 @@ const SUserInfo* CUserManager::find_user(const char* username) const {
 
 bool CUserManager::create_home_directory(const char* username) {
     if (!username || !*username) return false;
-
     if (strcmp(username, "root") == 0) return true;
 
-    auto& fs = FileSystem::instance();
-
-    FileNode* home_dir = fs.get_file("/home");
-    if (!home_dir) return false;
-
-    char home_path[MAX_PATH];
-    strcpy(home_path, "/home/");
-    strcat(home_path, username);
-
-    FileNode* dir = fs.create_file(home_path, FileType::Directory);
-    if (!dir) return false;
-
-    FileNode* check = fs.get_file(home_path);
-    if (!check) return false;
+    auto& fs = CFat32FileSystem::instance();
+    uint8_t empty[0];
+    fs.writeFile(ROOT_CLUSTER, empty, 0);
 
     return true;
 }

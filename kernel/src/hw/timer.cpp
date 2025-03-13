@@ -51,9 +51,9 @@ void append_string(char* buffer, size_t& pos, size_t max_size, const char* str) 
 }  // namespace
 
 void init_timer(uint32_t frequency) {
-    timer_frequency = frequency;
+    timer_frequency = frequency > 0 ? frequency : 100;
 
-    uint32_t divisor = PIT_FREQUENCY / frequency;
+    uint32_t divisor = PIT_FREQUENCY / timer_frequency;
 
     outb(PIT_COMMAND, 0x36);
 
@@ -68,6 +68,7 @@ uint64_t get_ticks() {
 }
 
 uint64_t get_uptime_seconds() {
+    if (timer_frequency == 0) return 0;
     return get_ticks() / timer_frequency;
 }
 

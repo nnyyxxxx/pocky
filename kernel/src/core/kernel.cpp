@@ -1,6 +1,6 @@
 #include "editor.hpp"
 #include "elf.hpp"
-#include "fs/filesystem.hpp"
+#include "fs/fat32.hpp"
 #include "gdt.hpp"
 #include "graphics.hpp"
 #include "heap.hpp"
@@ -130,36 +130,50 @@ extern "C" void kernel_main() {
     auto& heap = HeapAllocator::instance();
     heap.initialize(heap_start, HEAP_SIZE);
 
-    auto& fs = fs::FileSystem::instance();
-    fs.initialize();
+    auto& fs = fs::CFat32FileSystem::instance();
+    if (!fs.mount()) {
+        printf("FAT32: Failed to mount filesystem\n");
+        return;
+    }
 
-    const char* msg13 = "[13] Filesystem Init Done";
+    const char* msg13 = "[13] Filesystem Mounted";
     for (int i = 0; msg13[i] != '\0'; i++) {
         vga[i + 960] = 0x0F00 | msg13[i];
+    }
+
+    uint8_t buffer[1024];
+    fs.readFile(2, buffer, sizeof(buffer));
+    fs.writeFile(2, buffer, sizeof(buffer));
+
+    fs.unmount();
+
+    const char* msg14 = "[14] Filesystem Unmounted";
+    for (int i = 0; msg14[i] != '\0'; i++) {
+        vga[i + 1040] = 0x0F00 | msg14[i];
     }
 
     auto& scheduler = kernel::Scheduler::instance();
     scheduler.initialize(kernel::SchedulerPolicy::RoundRobin);
 
-    const char* msg14 = "[14] Scheduler Init Done";
-    for (int i = 0; msg14[i] != '\0'; i++) {
-        vga[i + 1040] = 0x0F00 | msg14[i];
+    const char* msg15 = "[15] Scheduler Init Done";
+    for (int i = 0; msg15[i] != '\0'; i++) {
+        vga[i + 1120] = 0x0F00 | msg15[i];
     }
 
     auto& smp = kernel::SMPManager::instance();
     smp.initialize();
 
-    const char* msg15 = "[15] SMP Init Done";
-    for (int i = 0; msg15[i] != '\0'; i++) {
-        vga[i + 1120] = 0x0F00 | msg15[i];
+    const char* msg16 = "[16] SMP Init Done";
+    for (int i = 0; msg16[i] != '\0'; i++) {
+        vga[i + 1200] = 0x0F00 | msg16[i];
     }
 
     if (smp.is_smp_enabled()) {
         smp.startup_application_processors();
 
-        const char* msg16 = "[16] AP Startup Done";
-        for (int i = 0; msg16[i] != '\0'; i++) {
-            vga[i + 1200] = 0x0F00 | msg16[i];
+        const char* msg17 = "[17] AP Startup Done";
+        for (int i = 0; msg17[i] != '\0'; i++) {
+            vga[i + 1280] = 0x0F00 | msg17[i];
         }
     }
 

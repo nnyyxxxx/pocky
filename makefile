@@ -1,5 +1,6 @@
 KERNEL_SRC = kernel/src
 BUILD_DIR = build
+IMAGE_DIR = image
 
 default: build
 
@@ -11,6 +12,13 @@ all: clean build
 
 format:
 	@clang-format -i $(shell find $(KERNEL_SRC) -name "*.cpp" -o -name "*.hpp") > /dev/null 2>&1
+
+image:
+	@mkdir -p $(IMAGE_DIR)
+	@if [ ! -f $(IMAGE_DIR)/fat32.img ]; then \
+		dd if=/dev/zero of=$(IMAGE_DIR)/fat32.img bs=1M count=64; \
+		mkfs.fat -F 32 $(IMAGE_DIR)/fat32.img; \
+	fi
 
 run:
 	@mkdir -p $(BUILD_DIR)/iso/boot/grub
@@ -29,9 +37,9 @@ run:
 	@cp $(BUILD_DIR)/kernel_elf.bin $(BUILD_DIR)/iso/boot/kernel.bin
 	@grub-mkrescue -o $(BUILD_DIR)/os.iso $(BUILD_DIR)/iso 2>/dev/null
 	-pkill -f qemu-system-x86_64 || true
-	qemu-system-x86_64 -cdrom $(BUILD_DIR)/os.iso -m 512M -display gtk -no-reboot -serial stdio -smp cores=2,threads=1
+	qemu-system-x86_64 -cdrom $(BUILD_DIR)/os.iso -drive file=$(IMAGE_DIR)/fat32.img,format=raw -boot order=d -m 512M -display gtk -no-reboot -serial stdio -smp cores=2,threads=1
 
 clean:
 	rm -rf $(BUILD_DIR)
 
-.PHONY: all build run clean format
+.PHONY: all build run clean format image
