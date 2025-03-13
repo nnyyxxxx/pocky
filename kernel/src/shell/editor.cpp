@@ -182,12 +182,26 @@ void TextEditor::process_keypress(char c) {
 
     if (c == 0x1B) {
         m_mode = EditorMode::NORMAL;
+        outb(VGA_CTRL_PORT, 0x0A);
+        outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xC0) | CURSOR_NORMAL_START);
+        outb(VGA_CTRL_PORT, 0x0B);
+        outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xE0) | CURSOR_NORMAL_END);
         display_status_line();
         return;
     }
 
     if (m_mode == EditorMode::NORMAL) {
         if (c == 'i') {
+            m_mode = EditorMode::INSERT;
+            outb(VGA_CTRL_PORT, 0x0A);
+            outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xC0) | CURSOR_INSERT_START);
+            outb(VGA_CTRL_PORT, 0x0B);
+            outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xE0) | CURSOR_INSERT_END);
+            display_status_line();
+            return;
+        }
+
+        if (c == 'a') {
             m_mode = EditorMode::INSERT;
             outb(VGA_CTRL_PORT, 0x0A);
             outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xC0) | CURSOR_INSERT_START);
