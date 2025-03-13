@@ -507,6 +507,22 @@ void cmd_rm(const char* path) {
         return;
     }
 
+    if (strchr(path, '*')) {
+        handle_wildcard_command(path, [](const char* name) {
+            auto& fs = fs::CFat32FileSystem::instance();
+            uint32_t cluster, size;
+            uint8_t attributes;
+            if (fs.findFile(name, cluster, size, attributes)) {
+                if (attributes & 0x10)
+                    fs.deleteDirectory(name);
+                else
+                    fs.deleteFile(name);
+            }
+        });
+        pm.terminate_process(pid);
+        return;
+    }
+
     auto& fs = fs::CFat32FileSystem::instance();
     uint32_t cluster, size;
     uint8_t attributes;
