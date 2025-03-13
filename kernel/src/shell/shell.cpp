@@ -379,7 +379,6 @@ void cmd_cat(const char* path) {
     pid_t pid = pm.create_process("cat", shell_pid);
 
     if (!path || !*path) {
-        printf("cat: missing operand\n");
         pm.terminate_process(pid);
         return;
     }
@@ -401,7 +400,6 @@ void cmd_cat(const char* path) {
         if (strcmp(name, path) == 0) {
             found = true;
             if (entry[11] & 0x10) {
-                printf("cat: %s: Is a directory\n", path);
                 pm.terminate_process(pid);
                 return;
             }
@@ -444,7 +442,6 @@ void cmd_cp(const char* args) {
     split_path(args, src, dst);
 
     if (!*src || !*dst) {
-        printf("cp: missing operand\n");
         pm.terminate_process(pid);
         return;
     }
@@ -470,7 +467,6 @@ void cmd_cp(const char* args) {
         if (strcmp(name, src) == 0) {
             found = true;
             if (entry[11] & 0x10) {
-                printf("cp: %s: Is a directory\n", src);
                 pm.terminate_process(pid);
                 return;
             }
@@ -534,7 +530,6 @@ void cmd_mv(const char* args) {
     split_path(args, src, dst);
 
     if (!*src || !*dst) {
-        printf("mv: missing operand\n");
         pm.terminate_process(pid);
         return;
     }
@@ -550,7 +545,6 @@ void cmd_rm(const char* path) {
     pid_t pid = pm.create_process("rm", shell_pid);
 
     if (!path || !*path) {
-        printf("rm: missing operand\n");
         pm.terminate_process(pid);
         return;
     }
