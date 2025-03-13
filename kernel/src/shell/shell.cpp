@@ -311,7 +311,6 @@ void cmd_mkdir(const char* path) {
     pid_t pid = pm.create_process("mkdir", shell_pid);
 
     if (!path || !*path) {
-        printf("mkdir: missing operand\n");
         pm.terminate_process(pid);
         return;
     }
