@@ -356,7 +356,6 @@ void cmd_cd(const char* path) {
 
         if (strcmp(name, path) == 0) {
             if (!(entry[11] & 0x10)) {
-                printf("cd: not a directory: %s\n", path);
                 pm.terminate_process(pid);
                 return;
             }
