@@ -327,7 +327,8 @@ void cmd_cd(const char* path) {
     pid_t pid = pm.create_process("cd", shell_pid);
 
     if (!path || !*path) {
-        printf("cd: missing operand\n");
+        auto& fs = fs::CFat32FileSystem::instance();
+        fs.set_current_path("/");
         pm.terminate_process(pid);
         return;
     }
