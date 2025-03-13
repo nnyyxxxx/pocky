@@ -261,7 +261,14 @@ void cmd_memory() {
     pm.terminate_process(pid);
 }
 
+void initialize_filesystem() {
+    auto& fs = fs::CFat32FileSystem::instance();
+    if (!fs.mount()) printf("Failed to mount filesystem\n");
+}
+
 void cmd_ls([[maybe_unused]] const char* path) {
+    initialize_filesystem();
+
     auto& pm = kernel::ProcessManager::instance();
     pid_t pid = pm.create_process("ls", shell_pid);
 
@@ -269,6 +276,7 @@ void cmd_ls([[maybe_unused]] const char* path) {
     uint8_t buffer[1024];
     fs.readFile(ROOT_CLUSTER, buffer, sizeof(buffer));
 
+    bool found_entries = false;
     for (size_t i = 0; i < sizeof(buffer); i += 32) {
         uint8_t* entry = &buffer[i];
         if (entry[0] == 0x00) break;
@@ -276,18 +284,31 @@ void cmd_ls([[maybe_unused]] const char* path) {
 
         char name[13] = {0};
         memcpy(name, entry, 11);
-        name[11] = '\0';
+
+        for (int j = 10; j >= 0; j--) {
+            if (name[j] == ' ')
+                name[j] = '\0';
+            else
+                break;
+        }
+
+        if (name[0] == '\0') continue;
 
         uint8_t attributes = entry[11];
         uint32_t size = (entry[28] | (entry[29] << 8) | (entry[30] << 16) | (entry[31] << 24));
 
         list_callback(name, attributes, size);
+        found_entries = true;
     }
+
+    if (!found_entries) printf("Directory is empty\n");
 
     pm.terminate_process(pid);
 }
 
 void cmd_mkdir(const char* path) {
+    initialize_filesystem();
+
     auto& pm = kernel::ProcessManager::instance();
     pid_t pid = pm.create_process("mkdir", shell_pid);
 
@@ -578,18 +599,23 @@ void cmd_rm(const char* path) {
 }
 
 void cmd_touch(const char* path) {
+    initialize_filesystem();
+
     auto& pm = kernel::ProcessManager::instance();
     pid_t pid = pm.create_process("touch", shell_pid);
 
-    if (!path) {
-        printf("Usage: touch <path>\n");
+    if (!path || !*path) {
+        printf("touch: missing operand\n");
         pm.terminate_process(pid);
         return;
     }
 
     auto& fs = fs::CFat32FileSystem::instance();
-    uint8_t empty[0];
-    fs.writeFile(ROOT_CLUSTER, empty, 0);
+    if (!fs.createFile(path, 0x20)) {
+        printf("touch: failed to create file '%s'\n", path);
+        pm.terminate_process(pid);
+        return;
+    }
 
     pm.terminate_process(pid);
 }

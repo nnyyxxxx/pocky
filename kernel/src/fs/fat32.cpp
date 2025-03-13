@@ -110,7 +110,35 @@ bool CFat32FileSystem::mount() {
     }
 
     if (!readFSInfo()) return false;
-    printf("FAT32: Filesystem mounted successfully\n");
+
+    uint8_t rootBuffer[m_bpb.m_bytesPerSector];
+    uint32_t rootSector = (ROOT_CLUSTER - 2) * m_bpb.m_sectorsPerCluster + m_firstDataSector;
+
+    if (!readSector(rootSector, rootBuffer)) {
+        printf("FAT32: Failed to read root directory\n");
+        return false;
+    }
+
+    if (rootBuffer[0] == 0) {
+        memset(rootBuffer, 0, m_bpb.m_bytesPerSector);
+
+        uint8_t* dotEntry = &rootBuffer[0];
+        memcpy(dotEntry, ".          ", 11);
+        dotEntry[11] = 0x10;
+        dotEntry[26] = ROOT_CLUSTER & 0xFF;
+        dotEntry[27] = (ROOT_CLUSTER >> 8) & 0xFF;
+
+        uint8_t* dotdotEntry = &rootBuffer[32];
+        memcpy(dotdotEntry, "..         ", 11);
+        dotdotEntry[11] = 0x10;
+        dotdotEntry[26] = ROOT_CLUSTER & 0xFF;
+        dotdotEntry[27] = (ROOT_CLUSTER >> 8) & 0xFF;
+
+        if (!diskWrite(rootSector, rootBuffer, m_bpb.m_bytesPerSector)) {
+            printf("FAT32: Failed to initialize root directory\n");
+            return false;
+        }
+    }
     return true;
 }
 
