@@ -21,6 +21,12 @@ image:
 	fi
 
 run:
+	@if [ ! -f $(IMAGE_DIR)/fat32.img ]; then \
+		echo "No file system image found, aborting..."; \
+		echo "Please run 'make image' to create an image.\n"; \
+		exit 1; \
+	fi
+
 	@mkdir -p $(BUILD_DIR)/iso/boot/grub
 	@echo "set timeout=10" > $(BUILD_DIR)/iso/boot/grub/grub.cfg
 	@echo "set default=0" >> $(BUILD_DIR)/iso/boot/grub/grub.cfg
