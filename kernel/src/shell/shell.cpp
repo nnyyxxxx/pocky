@@ -280,7 +280,7 @@ void cmd_ls(const char* path) {
     auto& fs = fs::CFat32FileSystem::instance();
     uint8_t buffer[1024];
 
-    uint32_t cluster = ROOT_CLUSTER;
+    uint32_t cluster = 0;
     uint32_t size = 0;
     uint8_t attributes = 0;
 
@@ -296,7 +296,8 @@ void cmd_ls(const char* path) {
             pm.terminate_process(pid);
             return;
         }
-    }
+    } else
+        cluster = fs.get_current_directory_cluster();
 
     fs.readFile(cluster, buffer, sizeof(buffer));
 
@@ -352,6 +353,7 @@ void cmd_cd(const char* path) {
     if (!path || !*path) {
         auto& fs = fs::CFat32FileSystem::instance();
         fs.set_current_path("/");
+        fs.set_current_directory_cluster(ROOT_CLUSTER);
         pm.terminate_process(pid);
         return;
     }
@@ -360,6 +362,7 @@ void cmd_cd(const char* path) {
 
     if (strcmp(path, "/") == 0) {
         fs.set_current_path("/");
+        fs.set_current_directory_cluster(ROOT_CLUSTER);
         pm.terminate_process(pid);
         return;
     }
@@ -391,6 +394,8 @@ void cmd_cd(const char* path) {
             }
             found = true;
 
+            uint32_t dir_cluster = (entry[26] | (entry[27] << 8));
+
             char new_path[MAX_PATH] = {0};
             if (strcmp(fs.get_current_path(), "/") == 0)
                 snprintf(new_path, sizeof(new_path), "/%s", path);
@@ -398,6 +403,7 @@ void cmd_cd(const char* path) {
                 snprintf(new_path, sizeof(new_path), "%s/%s", fs.get_current_path(), path);
 
             fs.set_current_path(new_path);
+            fs.set_current_directory_cluster(dir_cluster);
             break;
         }
     }

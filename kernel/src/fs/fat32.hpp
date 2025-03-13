@@ -61,7 +61,10 @@ struct SFat32LFNEntry {
 
 class CFat32FileSystem {
 public:
-    static CFat32FileSystem& instance();
+    static CFat32FileSystem& instance() {
+        static CFat32FileSystem instance;
+        return instance;
+    }
 
     bool initialize(const uint8_t* bootSector);
     bool mount();
@@ -75,16 +78,27 @@ public:
         strncpy(m_currentPath, path, MAX_PATH - 1);
     }
 
+    uint32_t get_current_directory_cluster() const {
+        return m_currentDirectoryCluster;
+    }
+
+    void set_current_directory_cluster(uint32_t cluster) {
+        m_currentDirectoryCluster = cluster;
+    }
+
     bool createFile(const char* name, uint8_t attributes);
     bool createDirectory(const char* name);
     bool deleteFile(const char* name);
     bool deleteDirectory(const char* name);
     bool renameFile(const char* oldName, const char* newName);
     bool findFile(const char* name, uint32_t& cluster, uint32_t& size, uint8_t& attributes);
+    bool findFileInDirectory(uint32_t dirCluster, const char* name, uint32_t& cluster,
+                             uint32_t& size, uint8_t& attributes);
 
 private:
     CFat32FileSystem() {
         strncpy(m_currentPath, "/", MAX_PATH - 1);
+        m_currentDirectoryCluster = 2;
     }
     ~CFat32FileSystem() = default;
     CFat32FileSystem(const CFat32FileSystem&) = delete;
@@ -119,5 +133,6 @@ private:
     uint32_t m_totalClusters;
     uint32_t m_firstFatSector;
     char m_currentPath[MAX_PATH];
+    uint32_t m_currentDirectoryCluster;
 };
 }  // namespace fs

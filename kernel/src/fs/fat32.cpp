@@ -7,11 +7,6 @@
 
 namespace fs {
 
-CFat32FileSystem& CFat32FileSystem::instance() {
-    static CFat32FileSystem instance;
-    return instance;
-}
-
 bool CFat32FileSystem::initialize(const uint8_t* bootSector) {
     if (!bootSector) return false;
 
@@ -581,6 +576,21 @@ void CFat32FileSystem::clearDirectory(uint32_t cluster) {
 bool CFat32FileSystem::createFile(const char* name, uint8_t attributes) {
     if (!validateFileName(name)) return false;
 
+    uint32_t parentCluster = m_currentDirectoryCluster;
+
+    if (name[0] == '/') {
+        parentCluster = ROOT_CLUSTER;
+        name++;
+    }
+
+    if (!*name) return false;
+
+    uint32_t existingCluster;
+    uint32_t existingSize;
+    uint8_t existingAttrs;
+    if (findFileInDirectory(parentCluster, name, existingCluster, existingSize, existingAttrs))
+        return false;
+
     uint32_t cluster = allocateCluster();
     if (!cluster) return false;
 
@@ -589,13 +599,13 @@ bool CFat32FileSystem::createFile(const char* name, uint8_t attributes) {
     uint8_t checksum = calculateShortNameChecksum(shortName);
 
     if (strlen(name) > 11) {
-        if (!writeLFNEntries(ROOT_CLUSTER, name, checksum)) {
+        if (!writeLFNEntries(parentCluster, name, checksum)) {
             freeCluster(cluster);
             return false;
         }
     }
 
-    if (!writeDirectoryEntry(ROOT_CLUSTER, shortName, attributes, cluster, 0)) {
+    if (!writeDirectoryEntry(parentCluster, shortName, attributes, cluster, 0)) {
         freeCluster(cluster);
         return false;
     }
@@ -606,6 +616,21 @@ bool CFat32FileSystem::createFile(const char* name, uint8_t attributes) {
 bool CFat32FileSystem::createDirectory(const char* name) {
     if (!validateFileName(name)) return false;
 
+    uint32_t parentCluster = m_currentDirectoryCluster;
+
+    if (name[0] == '/') {
+        parentCluster = ROOT_CLUSTER;
+        name++;
+    }
+
+    if (!*name) return false;
+
+    uint32_t existingCluster;
+    uint32_t existingSize;
+    uint8_t existingAttrs;
+    if (findFileInDirectory(parentCluster, name, existingCluster, existingSize, existingAttrs))
+        return false;
+
     uint32_t cluster = allocateCluster();
     if (!cluster) return false;
 
@@ -614,13 +639,13 @@ bool CFat32FileSystem::createDirectory(const char* name) {
     uint8_t checksum = calculateShortNameChecksum(shortName);
 
     if (strlen(name) > 11) {
-        if (!writeLFNEntries(ROOT_CLUSTER, name, checksum)) {
+        if (!writeLFNEntries(parentCluster, name, checksum)) {
             freeCluster(cluster);
             return false;
         }
     }
 
-    if (!writeDirectoryEntry(ROOT_CLUSTER, shortName, 0x10, cluster, 0)) {
+    if (!writeDirectoryEntry(parentCluster, shortName, 0x10, cluster, 0)) {
         freeCluster(cluster);
         return false;
     }
@@ -638,8 +663,8 @@ bool CFat32FileSystem::createDirectory(const char* name) {
     uint8_t* dotdotEntry = &sectorData[32];
     strcpy(reinterpret_cast<char*>(dotdotEntry), "..");
     dotdotEntry[11] = 0x10;
-    dotdotEntry[26] = ROOT_CLUSTER & 0xFF;
-    dotdotEntry[27] = (ROOT_CLUSTER >> 8) & 0xFF;
+    dotdotEntry[26] = parentCluster & 0xFF;
+    dotdotEntry[27] = (parentCluster >> 8) & 0xFF;
 
     return diskWrite(sector, sectorData, m_bpb.m_bytesPerSector);
 }
@@ -731,23 +756,83 @@ bool CFat32FileSystem::renameFile(const char* oldName, const char* newName) {
 
 bool CFat32FileSystem::findFile(const char* name, uint32_t& cluster, uint32_t& size,
                                 uint8_t& attributes) {
+    uint32_t searchCluster = m_currentDirectoryCluster;
+
+    if (name[0] == '/') {
+        searchCluster = ROOT_CLUSTER;
+        name++;
+    }
+
+    if (!*name) {
+        cluster = searchCluster;
+        size = 0;
+        attributes = 0x10;
+        return true;
+    }
+
+    const char* slash = strchr(name, '/');
+    if (slash) {
+        char dirname[13] = {0};
+        strncpy(dirname, name, slash - name);
+
+        uint32_t dirCluster;
+        uint32_t dirSize;
+        uint8_t dirAttrs;
+        if (!findFileInDirectory(searchCluster, dirname, dirCluster, dirSize, dirAttrs))
+            return false;
+
+        if (!(dirAttrs & 0x10)) return false;
+
+        return findFile(slash + 1, cluster, size, attributes);
+    }
+
+    return findFileInDirectory(searchCluster, name, cluster, size, attributes);
+}
+
+bool CFat32FileSystem::findFileInDirectory(uint32_t dirCluster, const char* name, uint32_t& cluster,
+                                           uint32_t& size, uint8_t& attributes) {
     uint8_t sectorData[m_bpb.m_bytesPerSector];
-    uint32_t sector = (ROOT_CLUSTER - 2) * m_bpb.m_sectorsPerCluster + m_firstDataSector;
-    if (!readSector(sector, sectorData)) return false;
+    uint32_t currentCluster = dirCluster;
 
-    for (size_t i = 0; i < m_bpb.m_bytesPerSector; i += 32) {
-        uint8_t* entry = &sectorData[i];
-        if (entry[0] == 0x00) break;
-        if (entry[0] == 0xE5) continue;
+    while (true) {
+        uint32_t sector = (currentCluster - 2) * m_bpb.m_sectorsPerCluster + m_firstDataSector;
 
-        char entryName[13] = {0};
-        memcpy(entryName, entry, 11);
-        if (strcmp(entryName, name) == 0) {
-            cluster = (entry[26] | (entry[27] << 8));
-            size = (entry[28] | (entry[29] << 8) | (entry[30] << 16) | (entry[31] << 24));
-            attributes = entry[11];
-            return true;
+        for (uint32_t i = 0; i < m_bpb.m_sectorsPerCluster; i++) {
+            if (!readSector(sector + i, sectorData)) return false;
+
+            for (size_t j = 0; j < m_bpb.m_bytesPerSector; j += 32) {
+                uint8_t* entry = &sectorData[j];
+                if (entry[0] == 0x00) break;
+
+                if (entry[0] == 0xE5) continue;
+
+                if (entry[11] == 0x0F) continue;
+
+                char entryName[13] = {0};
+                memcpy(entryName, entry, 11);
+
+                for (int k = 10; k >= 0; k--) {
+                    if (entryName[k] == ' ')
+                        entryName[k] = '\0';
+                    else
+                        break;
+                }
+
+                if (strcmp(entryName, name) == 0) {
+                    cluster = (entry[26] | (entry[27] << 8));
+                    size = (entry[28] | (entry[29] << 8) | (entry[30] << 16) | (entry[31] << 24));
+                    attributes = entry[11];
+                    return true;
+                }
+            }
         }
+
+        uint32_t nextCluster = readFatEntry(currentCluster);
+        if (nextCluster >= 0x0FFFFFF8) break;
+
+        if (nextCluster == 0x0FFFFFF7) return false;
+
+        currentCluster = nextCluster;
     }
 
     return false;
