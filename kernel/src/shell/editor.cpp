@@ -307,7 +307,7 @@ void TextEditor::process_keypress(char c) {
             return;
         }
 
-        if (c == '\r' && m_buffer_size < MAX_BUFFER_SIZE - 1) {
+        if ((c == '\r' || c == '\n') && m_buffer_size < MAX_BUFFER_SIZE - 1) {
             memmove(&m_buffer[m_cursor_pos + 1], &m_buffer[m_cursor_pos],
                     m_buffer_size - m_cursor_pos);
             m_buffer[m_cursor_pos] = '\n';
