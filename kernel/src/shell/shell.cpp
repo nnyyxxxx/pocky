@@ -266,7 +266,7 @@ void initialize_filesystem() {
     if (!fs.mount()) printf("Failed to mount filesystem\n");
 }
 
-void cmd_ls([[maybe_unused]] const char* path) {
+void cmd_ls(const char* path) {
     initialize_filesystem();
 
     auto& pm = kernel::ProcessManager::instance();
@@ -301,8 +301,6 @@ void cmd_ls([[maybe_unused]] const char* path) {
         found_entries = true;
     }
 
-    if (!found_entries) printf("Directory is empty\n");
-
     pm.terminate_process(pid);
 }
 
@@ -319,11 +317,7 @@ void cmd_mkdir(const char* path) {
     }
 
     auto& fs = fs::CFat32FileSystem::instance();
-    if (!fs.createDirectory(path)) {
-        printf("mkdir: failed to create directory '%s'\n", path);
-        pm.terminate_process(pid);
-        return;
-    }
+    fs.createDirectory(path);
 
     pm.terminate_process(pid);
 }
@@ -377,8 +371,6 @@ void cmd_cd(const char* path) {
             break;
         }
     }
-
-    if (!found) printf("cd: no such directory: %s\n", path);
 
     pm.terminate_process(pid);
 }
@@ -440,8 +432,6 @@ void cmd_cat(const char* path) {
         }
     }
 
-    if (!found) printf("cat: %s: No such file or directory\n", path);
-
     printf("\n");
     pm.terminate_process(pid);
 }
@@ -493,7 +483,6 @@ void cmd_cp(const char* args) {
     }
 
     if (!found) {
-        printf("cp: %s: No such file or directory\n", src);
         pm.terminate_process(pid);
         return;
     }
@@ -510,7 +499,6 @@ void cmd_cp(const char* args) {
     }
 
     if (!found_free) {
-        printf("cp: no space left in directory\n");
         pm.terminate_process(pid);
         return;
     }
@@ -553,11 +541,7 @@ void cmd_mv(const char* args) {
     }
 
     auto& fs = fs::CFat32FileSystem::instance();
-    if (!fs.renameFile(src, dst)) {
-        printf("mv: failed to rename '%s' to '%s'\n", src, dst);
-        pm.terminate_process(pid);
-        return;
-    }
+    fs.renameFile(src, dst);
 
     pm.terminate_process(pid);
 }
@@ -576,24 +560,14 @@ void cmd_rm(const char* path) {
     uint32_t cluster, size;
     uint8_t attributes;
     if (!fs.findFile(path, cluster, size, attributes)) {
-        printf("rm: cannot remove '%s': No such file or directory\n", path);
         pm.terminate_process(pid);
         return;
     }
 
-    if (attributes & 0x10) {
-        if (!fs.deleteDirectory(path)) {
-            printf("rm: cannot remove '%s': Directory not empty\n", path);
-            pm.terminate_process(pid);
-            return;
-        }
-    } else {
-        if (!fs.deleteFile(path)) {
-            printf("rm: failed to remove '%s'\n", path);
-            pm.terminate_process(pid);
-            return;
-        }
-    }
+    if (attributes & 0x10)
+        fs.deleteDirectory(path);
+    else
+        fs.deleteFile(path);
 
     pm.terminate_process(pid);
 }
@@ -611,11 +585,7 @@ void cmd_touch(const char* path) {
     }
 
     auto& fs = fs::CFat32FileSystem::instance();
-    if (!fs.createFile(path, 0x20)) {
-        printf("touch: failed to create file '%s'\n", path);
-        pm.terminate_process(pid);
-        return;
-    }
+    fs.createFile(path, 0x20);
 
     pm.terminate_process(pid);
 }
