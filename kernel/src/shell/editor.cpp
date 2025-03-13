@@ -39,27 +39,22 @@ TextEditor& TextEditor::instance() {
 }
 
 size_t TextEditor::get_line_length(size_t row) const {
-    size_t current_row = 0;
     size_t pos = 0;
-    size_t line_start = 0;
+    size_t current_row = 0;
 
-    while (pos < m_buffer_size && current_row < row) {
-        if (m_buffer[pos] == '\n') {
-            current_row++;
-            line_start = pos + 1;
+    while (pos < m_buffer_size) {
+        if (current_row == row) {
+            size_t len = 0;
+            while (pos + len < m_buffer_size && m_buffer[pos + len] != '\n')
+                len++;
+            return len;
         }
+
+        if (m_buffer[pos] == '\n') current_row++;
         pos++;
     }
 
-    if (current_row != row) return static_cast<size_t>(-1);
-
-    size_t length = 0;
-    while (pos < m_buffer_size && m_buffer[pos] != '\n') {
-        length++;
-        pos++;
-    }
-
-    return length;
+    return 0;
 }
 
 void TextEditor::update_cursor_pos() {

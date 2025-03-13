@@ -85,37 +85,20 @@ void split_path(const char* input, char* first, char* second) {
     strcpy(second, space);
 }
 
-void print_file_type(uint8_t attributes) {
-    if (attributes & 0x10)
-        printf("d");
-    else if (attributes & 0x08)
-        printf("v");
-    else if (attributes & 0x01)
-        printf("r");
-    else
-        printf("-");
-
-    printf("%c", (attributes & 0x02) ? 'h' : '-');
-    printf("%c", (attributes & 0x04) ? 's' : '-');
-    printf("%c", (attributes & 0x20) ? 'a' : '-');
-}
-
-void print_file_size(uint32_t size) {
-    if (size < 1024)
-        printf("%5u ", size);
-    else if (size < 1024 * 1024)
-        printf("%4uK ", size / 1024);
-    else
-        printf("%4uM ", size / (1024 * 1024));
-}
-
 void list_callback(const char* name, uint8_t attributes, uint32_t size) {
     if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) return;
 
     if (attributes & 0x10)
         printf("d ");
-    else
+    else {
         printf("f ");
+        if (size < 1024)
+            printf("(%u B) ", size);
+        else if (size < 1024 * 1024)
+            printf("(%u KB) ", size / 1024);
+        else
+            printf("(%u MB) ", size / (1024 * 1024));
+    }
 
     printf("%s\n", name);
 }
@@ -308,7 +291,6 @@ void cmd_ls(const char* path) {
 
     fs.readFile(cluster, buffer, sizeof(buffer));
 
-    bool found_entries = false;
     for (size_t i = 0; i < sizeof(buffer); i += 32) {
         uint8_t* entry = &buffer[i];
         if (entry[0] == 0x00) break;
@@ -330,7 +312,6 @@ void cmd_ls(const char* path) {
         uint32_t size = (entry[28] | (entry[29] << 8) | (entry[30] << 16) | (entry[31] << 24));
 
         list_callback(name, attributes, size);
-        found_entries = true;
     }
 
     pm.terminate_process(pid);
@@ -391,7 +372,6 @@ void cmd_cd(const char* path) {
     uint32_t current_dir_cluster = fs.get_current_directory_cluster();
     fs.readFile(current_dir_cluster, buffer, sizeof(buffer));
 
-    bool found = false;
     for (size_t i = 0; i < sizeof(buffer); i += 32) {
         uint8_t* entry = &buffer[i];
         if (entry[0] == 0x00) break;
@@ -413,7 +393,6 @@ void cmd_cd(const char* path) {
                 pm.terminate_process(pid);
                 return;
             }
-            found = true;
 
             uint32_t dir_cluster = (entry[26] | (entry[27] << 8));
 
@@ -449,7 +428,6 @@ void cmd_cat(const char* path) {
     uint32_t current_dir_cluster = fs.get_current_directory_cluster();
     fs.readFile(current_dir_cluster, buffer, sizeof(buffer));
 
-    bool found = false;
     for (size_t i = 0; i < sizeof(buffer); i += 32) {
         uint8_t* entry = &buffer[i];
         if (entry[0] == 0x00) break;
@@ -467,7 +445,6 @@ void cmd_cat(const char* path) {
         }
 
         if (strcmp(name, path) == 0) {
-            found = true;
             if (entry[11] & 0x10) {
                 pm.terminate_process(pid);
                 return;

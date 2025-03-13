@@ -49,8 +49,11 @@ private:
     bool identify();
 
     bool m_initialized = false;
-    uint16_t m_io_base = ATA_PRIMARY_IO;
     bool m_is_slave = false;
+    uint16_t m_io_base = ATA_PRIMARY_IO;
+    uint32_t m_sectors = 0;
+    char m_model[41] = {0};
+    char m_serial[21] = {0};
 };
 
 }  // namespace drivers

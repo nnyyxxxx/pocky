@@ -65,10 +65,22 @@ bool CATADriver::identify() {
     }
 
     uint16_t data[256];
-    for (int i = 0; i < 256; i++) {
+    for (int i = 0; i < 256; i++)
         data[i] = inw(m_io_base + ATA_DATA);
+
+    m_sectors = data[60] | (data[61] << 16);
+
+    for (int i = 0; i < 20; i++) {
+        m_serial[i] = (char)((data[10 + i] >> 8) | (data[10 + i] << 8));
+        m_serial[i] = m_serial[i] == ' ' ? '_' : m_serial[i];
     }
 
+    for (int i = 0; i < 40; i++) {
+        m_model[i] = (char)((data[27 + i] >> 8) | (data[27 + i] << 8));
+        m_model[i] = m_model[i] == ' ' ? '_' : m_model[i];
+    }
+
+    printf("ATA: Model: %s, Serial: %s, Sectors: %u\n", m_model, m_serial, m_sectors);
     return true;
 }
 
