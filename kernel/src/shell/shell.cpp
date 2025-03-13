@@ -367,8 +367,44 @@ void cmd_cd(const char* path) {
         return;
     }
 
+    if (strcmp(path, "..") == 0) {
+        const char* current_path = fs.get_current_path();
+        if (strcmp(current_path, "/") == 0) {
+            pm.terminate_process(pid);
+            return;
+        }
+
+        const char* last_slash = strrchr(current_path, '/');
+        if (!last_slash) {
+            fs.set_current_path("/");
+            fs.set_current_directory_cluster(ROOT_CLUSTER);
+            pm.terminate_process(pid);
+            return;
+        }
+
+        char parent_path[MAX_PATH] = {0};
+        size_t parent_len = last_slash - current_path;
+        if (parent_len == 0) parent_len = 1;
+        strncpy(parent_path, current_path, parent_len);
+        parent_path[parent_len] = '\0';
+
+        uint32_t parent_cluster = 0;
+        uint32_t size = 0;
+        uint8_t attributes = 0;
+        if (!fs.findFile(parent_path, parent_cluster, size, attributes)) {
+            pm.terminate_process(pid);
+            return;
+        }
+
+        fs.set_current_path(parent_path);
+        fs.set_current_directory_cluster(parent_cluster);
+        pm.terminate_process(pid);
+        return;
+    }
+
     uint8_t buffer[1024];
-    fs.readFile(ROOT_CLUSTER, buffer, sizeof(buffer));
+    uint32_t current_dir_cluster = fs.get_current_directory_cluster();
+    fs.readFile(current_dir_cluster, buffer, sizeof(buffer));
 
     bool found = false;
     for (size_t i = 0; i < sizeof(buffer); i += 32) {
