@@ -353,6 +353,7 @@ void cmd_cd(const char* path) {
     if (!path || !*path) {
         auto& fs = fs::CFat32FileSystem::instance();
         fs.set_current_path("/");
+        fs.set_current_dir_name("/");
         fs.set_current_directory_cluster(ROOT_CLUSTER);
         pm.terminate_process(pid);
         return;
@@ -362,6 +363,7 @@ void cmd_cd(const char* path) {
 
     if (strcmp(path, "/") == 0) {
         fs.set_current_path("/");
+        fs.set_current_dir_name("/");
         fs.set_current_directory_cluster(ROOT_CLUSTER);
         pm.terminate_process(pid);
         return;
@@ -406,6 +408,7 @@ void cmd_cd(const char* path) {
         const char* last_slash = strrchr(current_path, '/');
         if (!last_slash || last_slash == current_path) {
             fs.set_current_path("/");
+            fs.set_current_dir_name("/");
             fs.set_current_directory_cluster(ROOT_CLUSTER);
         } else {
             char parent_path[MAX_PATH] = {0};
@@ -416,7 +419,20 @@ void cmd_cd(const char* path) {
 
             if (parent_path[0] == '\0') strcpy(parent_path, "/");
 
+            const char* parent_dir_name = "/";
+            const char* prev_slash = parent_path;
+            if (strcmp(parent_path, "/") != 0) {
+                prev_slash = strrchr(parent_path, '/');
+                if (prev_slash && prev_slash != parent_path)
+                    parent_dir_name = prev_slash + 1;
+                else if (prev_slash == parent_path)
+                    parent_dir_name = parent_path + 1;
+                else
+                    parent_dir_name = parent_path;
+            }
+
             fs.set_current_path(parent_path);
+            fs.set_current_dir_name(parent_dir_name);
             fs.set_current_directory_cluster(parent_cluster);
         }
 
@@ -461,6 +477,7 @@ void cmd_cd(const char* path) {
                 snprintf(new_path, sizeof(new_path), "%s/%s", fs.get_current_path(), path);
 
             fs.set_current_path(new_path);
+            fs.set_current_dir_name(path);
             fs.set_current_directory_cluster(dir_cluster);
             break;
         }
@@ -914,23 +931,43 @@ void handle_redirection(const char* command) {
     input_pos = 0;
 }
 
-void print_prompt() {
-    auto& fs = fs::CFat32FileSystem::instance();
-    const char* current_path = fs.get_current_path();
-    char dir_name[256];
+const char* get_dir_name(const char* path) {
+    static char buffer[MAX_PATH];
 
-    if (strcmp(current_path, "/") == 0)
-        strcpy(dir_name, "/");
-    else {
-        const char* last_slash = strrchr(current_path, '/');
-        if (last_slash)
-            strcpy(dir_name, last_slash + 1);
-        else
-            strcpy(dir_name, current_path);
+    if (!path || !*path) {
+        strcpy(buffer, "/");
+        return buffer;
     }
 
+    if (strcmp(path, "/") == 0) {
+        strcpy(buffer, "/");
+        return buffer;
+    }
+
+    strncpy(buffer, path, MAX_PATH - 1);
+    buffer[MAX_PATH - 1] = '\0';
+
+    size_t len = strlen(buffer);
+    if (len > 1 && buffer[len - 1] == '/') buffer[len - 1] = '\0';
+
+    char* last_slash = strrchr(buffer, '/');
+    if (!last_slash) return buffer;
+
+    if (last_slash == buffer) return last_slash + 1;
+
+    return last_slash + 1;
+}
+
+void print_prompt() {
     auto& user_manager = fs::CUserManager::instance();
     const char* username = user_manager.get_current_username();
+    auto& fs = fs::CFat32FileSystem::instance();
+    const char* dir_name = fs.get_current_dir_name();
+
+    if (!dir_name || !*dir_name) {
+        fs.set_current_dir_name("/");
+        dir_name = "/";
+    }
 
     set_white();
     printf("[");
@@ -940,6 +977,7 @@ void print_prompt() {
     printf("@");
     set_gray();
     printf("kernel");
+    set_white();
     printf(" ");
     set_gray();
     printf("%s", dir_name);
@@ -1166,6 +1204,11 @@ void init_shell() {
     screen_state::init();
 
     initialize_filesystem();
+
+    auto& fs = fs::CFat32FileSystem::instance();
+    fs.set_current_path("/");
+    fs.set_current_dir_name("/");
+    fs.set_current_directory_cluster(ROOT_CLUSTER);
 
     auto& user_manager = fs::CUserManager::instance();
     user_manager.switch_user("root", "root");

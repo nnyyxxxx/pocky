@@ -75,7 +75,29 @@ public:
         return m_currentPath;
     }
     void set_current_path(const char* path) {
+        if (!path) {
+            m_currentPath[0] = '/';
+            m_currentPath[1] = '\0';
+            return;
+        }
+
         strncpy(m_currentPath, path, MAX_PATH - 1);
+        m_currentPath[MAX_PATH - 1] = '\0';
+    }
+
+    const char* get_current_dir_name() const {
+        return m_currentDirName;
+    }
+
+    void set_current_dir_name(const char* name) {
+        if (!name) {
+            m_currentDirName[0] = '/';
+            m_currentDirName[1] = '\0';
+            return;
+        }
+
+        strncpy(m_currentDirName, name, MAX_PATH - 1);
+        m_currentDirName[MAX_PATH - 1] = '\0';
     }
 
     uint32_t get_current_directory_cluster() const {
@@ -98,6 +120,7 @@ public:
 private:
     CFat32FileSystem() {
         strncpy(m_currentPath, "/", MAX_PATH - 1);
+        strncpy(m_currentDirName, "/", MAX_PATH - 1);
         m_currentDirectoryCluster = 2;
     }
     ~CFat32FileSystem() = default;
@@ -133,6 +156,7 @@ private:
     uint32_t m_totalClusters;
     uint32_t m_firstFatSector;
     char m_currentPath[MAX_PATH];
+    char m_currentDirName[MAX_PATH];
     uint32_t m_currentDirectoryCluster;
 };
 }  // namespace fs
