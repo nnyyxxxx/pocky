@@ -269,11 +269,28 @@ void initialize_filesystem() {
 
     auto& user_manager = fs::CUserManager::instance();
     user_manager.initialize();
+
+    uint32_t saved_cluster = fs.get_current_directory_cluster();
+    const char* saved_path = fs.get_current_path();
+    const char* saved_dir_name = fs.get_current_dir_name();
+
+    fs.set_current_path("/");
+    fs.set_current_dir_name("/");
+    fs.set_current_directory_cluster(ROOT_CLUSTER);
+
+    const char* default_dirs[] = {"etc", "home", "tmp"};
+    for (const char* dir : default_dirs) {
+        uint32_t cluster, size;
+        uint8_t attributes;
+        if (!fs.findFile(dir, cluster, size, attributes)) fs.createDirectory(dir);
+    }
+
+    fs.set_current_path(saved_path);
+    fs.set_current_dir_name(saved_dir_name);
+    fs.set_current_directory_cluster(saved_cluster);
 }
 
 void cmd_ls(const char* path) {
-    initialize_filesystem();
-
     auto& pm = kernel::ProcessManager::instance();
     pid_t pid = pm.create_process("ls", shell_pid);
 
