@@ -347,8 +347,6 @@ void cmd_ls(const char* path) {
 }
 
 void cmd_mkdir(const char* path) {
-    initialize_filesystem();
-
     auto& pm = kernel::ProcessManager::instance();
     pid_t pid = pm.create_process("mkdir", shell_pid);
 
@@ -703,8 +701,6 @@ void cmd_rm(const char* path) {
 }
 
 void cmd_touch(const char* path) {
-    initialize_filesystem();
-
     auto& pm = kernel::ProcessManager::instance();
     pid_t pid = pm.create_process("touch", shell_pid);
 
