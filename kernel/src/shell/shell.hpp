@@ -27,7 +27,6 @@ void cmd_ls(const char* path);
 void cmd_mkdir(const char* path);
 void cmd_cd(const char* path);
 void cmd_cat(const char* path);
-void cmd_cp(const char* args);
 void cmd_mv(const char* args);
 void cmd_rm(const char* path);
 void cmd_touch(const char* path);

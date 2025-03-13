@@ -155,7 +155,6 @@ void cmd_help() {
                             "  mkdir    - Create a new directory\n"
                             "  cd       - Change current directory\n"
                             "  cat      - Display file contents\n"
-                            "  cp       - Copy a file\n"
                             "  mv       - Move or rename a file\n"
                             "  rm       - Remove a file or directory\n"
                             "  touch    - Create an empty file\n"
@@ -500,94 +499,6 @@ void cmd_cat(const char* path) {
     }
 
     printf("\n");
-    pm.terminate_process(pid);
-}
-
-void cmd_cp(const char* args) {
-    auto& pm = kernel::ProcessManager::instance();
-    pid_t pid = pm.create_process("cp", shell_pid);
-
-    char src[MAX_PATH];
-    char dst[MAX_PATH];
-    split_path(args, src, dst);
-
-    if (!*src || !*dst) {
-        pm.terminate_process(pid);
-        return;
-    }
-
-    auto& fs = fs::CFat32FileSystem::instance();
-    uint8_t buffer[1024];
-    fs.readFile(ROOT_CLUSTER, buffer, sizeof(buffer));
-
-    bool found = false;
-    uint32_t src_cluster = 0;
-    uint32_t src_size = 0;
-    uint8_t src_attributes = 0;
-
-    for (size_t i = 0; i < sizeof(buffer); i += 32) {
-        uint8_t* entry = &buffer[i];
-        if (entry[0] == 0x00) break;
-        if (entry[0] == 0xE5) continue;
-
-        char name[13] = {0};
-        memcpy(name, entry, 11);
-        name[11] = '\0';
-
-        if (strcmp(name, src) == 0) {
-            found = true;
-            if (entry[11] & 0x10) {
-                pm.terminate_process(pid);
-                return;
-            }
-            src_cluster = (entry[26] | (entry[27] << 8));
-            src_size = (entry[28] | (entry[29] << 8) | (entry[30] << 16) | (entry[31] << 24));
-            src_attributes = entry[11];
-            break;
-        }
-    }
-
-    if (!found) {
-        pm.terminate_process(pid);
-        return;
-    }
-
-    size_t free_entry = 0;
-    bool found_free = false;
-    for (size_t i = 0; i < sizeof(buffer); i += 32) {
-        uint8_t* entry = &buffer[i];
-        if (entry[0] == 0x00 || entry[0] == 0xE5) {
-            free_entry = i;
-            found_free = true;
-            break;
-        }
-    }
-
-    if (!found_free) {
-        pm.terminate_process(pid);
-        return;
-    }
-
-    uint8_t* content = new uint8_t[src_size];
-    fs.readFile(src_cluster, content, src_size);
-
-    uint8_t* dst_entry = &buffer[free_entry];
-    memset(dst_entry, 0, 32);
-    memset(dst_entry, ' ', 11);
-    strncpy(reinterpret_cast<char*>(dst_entry), dst, strlen(dst));
-
-    dst_entry[11] = src_attributes;
-    dst_entry[26] = ROOT_CLUSTER & 0xFF;
-    dst_entry[27] = (ROOT_CLUSTER >> 8) & 0xFF;
-    dst_entry[28] = src_size & 0xFF;
-    dst_entry[29] = (src_size >> 8) & 0xFF;
-    dst_entry[30] = (src_size >> 16) & 0xFF;
-    dst_entry[31] = (src_size >> 24) & 0xFF;
-
-    fs.writeFile(ROOT_CLUSTER, buffer, sizeof(buffer));
-    fs.writeFile(ROOT_CLUSTER, content, src_size);
-
-    delete[] content;
     pm.terminate_process(pid);
 }
 
@@ -1074,8 +985,6 @@ void process_command() {
         cmd_cd(args);
     else if (strcmp(cmd, "cat") == 0)
         cmd_cat(args);
-    else if (strcmp(cmd, "cp") == 0)
-        cmd_cp(args);
     else if (strcmp(cmd, "mv") == 0)
         cmd_mv(args);
     else if (strcmp(cmd, "rm") == 0)
