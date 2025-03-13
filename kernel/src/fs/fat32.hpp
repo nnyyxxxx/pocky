@@ -69,99 +69,29 @@ private:
         uint32_t cluster;
     };
 
-    CFat32FileSystem() {
-        strncpy(m_currentPath, "/", MAX_PATH - 1);
-        strncpy(m_currentDirName, "/", MAX_PATH - 1);
-        m_currentDirectoryCluster = 2;
-        m_dirStackSize = 1;
-
-        strncpy(m_dirStack[0].name, "/", MAX_PATH - 1);
-        strncpy(m_dirStack[0].path, "/", MAX_PATH - 1);
-        m_dirStack[0].cluster = ROOT_CLUSTER;
-    }
+    CFat32FileSystem();
 
     SDirStackEntry m_dirStack[MAX_DIR_STACK];
     size_t m_dirStackSize;
 
 public:
-    bool push_directory(const char* name, const char* path, uint32_t cluster) {
-        if (m_dirStackSize >= MAX_DIR_STACK) return false;
-
-        strncpy(m_dirStack[m_dirStackSize].name, name, MAX_PATH - 1);
-        strncpy(m_dirStack[m_dirStackSize].path, path, MAX_PATH - 1);
-        m_dirStack[m_dirStackSize].cluster = cluster;
-        m_dirStackSize++;
-
-        return true;
-    }
-
-    bool pop_directory() {
-        if (m_dirStackSize <= 1) return false;
-
-        m_dirStackSize--;
-        strncpy(m_currentPath, m_dirStack[m_dirStackSize - 1].path, MAX_PATH - 1);
-        strncpy(m_currentDirName, m_dirStack[m_dirStackSize - 1].name, MAX_PATH - 1);
-        m_currentDirectoryCluster = m_dirStack[m_dirStackSize - 1].cluster;
-
-        return true;
-    }
-
-    const SDirStackEntry* get_current_dir_entry() const {
-        if (m_dirStackSize == 0) return nullptr;
-        return &m_dirStack[m_dirStackSize - 1];
-    }
-
-    const SDirStackEntry* get_parent_dir_entry() const {
-        if (m_dirStackSize <= 1) return nullptr;
-        return &m_dirStack[m_dirStackSize - 2];
-    }
-
-    static CFat32FileSystem& instance() {
-        static CFat32FileSystem instance;
-        return instance;
-    }
+    static CFat32FileSystem& instance();
+    bool push_directory(const char* name, const char* path, uint32_t cluster);
+    bool pop_directory();
+    const SDirStackEntry* get_current_dir_entry() const;
+    const SDirStackEntry* get_parent_dir_entry() const;
 
     bool initialize(const uint8_t* bootSector);
     bool mount();
     void unmount();
     void readFile(uint32_t startCluster, uint8_t* buffer, size_t bufferSize);
     bool writeFile(uint32_t startCluster, const uint8_t* data, size_t dataSize);
-    const char* get_current_path() const {
-        return m_currentPath;
-    }
-    void set_current_path(const char* path) {
-        if (!path) {
-            m_currentPath[0] = '/';
-            m_currentPath[1] = '\0';
-            return;
-        }
-
-        strncpy(m_currentPath, path, MAX_PATH - 1);
-        m_currentPath[MAX_PATH - 1] = '\0';
-    }
-
-    const char* get_current_dir_name() const {
-        return m_currentDirName;
-    }
-
-    void set_current_dir_name(const char* name) {
-        if (!name) {
-            m_currentDirName[0] = '/';
-            m_currentDirName[1] = '\0';
-            return;
-        }
-
-        strncpy(m_currentDirName, name, MAX_PATH - 1);
-        m_currentDirName[MAX_PATH - 1] = '\0';
-    }
-
-    uint32_t get_current_directory_cluster() const {
-        return m_currentDirectoryCluster;
-    }
-
-    void set_current_directory_cluster(uint32_t cluster) {
-        m_currentDirectoryCluster = cluster;
-    }
+    const char* get_current_path() const;
+    void set_current_path(const char* path);
+    const char* get_current_dir_name() const;
+    void set_current_dir_name(const char* name);
+    uint32_t get_current_directory_cluster() const;
+    void set_current_directory_cluster(uint32_t cluster);
 
     bool createFile(const char* name, uint8_t attributes);
     bool createDirectory(const char* name);
@@ -171,7 +101,6 @@ public:
     bool findFile(const char* name, uint32_t& cluster, uint32_t& size, uint8_t& attributes);
     bool findFileInDirectory(uint32_t dirCluster, const char* name, uint32_t& cluster,
                              uint32_t& size, uint8_t& attributes);
-
     bool updateFileSize(const char* filename, uint32_t newSize);
 
 private:

@@ -7,6 +7,92 @@
 
 namespace fs {
 
+CFat32FileSystem::CFat32FileSystem() {
+    strncpy(m_currentPath, "/", MAX_PATH - 1);
+    strncpy(m_currentDirName, "/", MAX_PATH - 1);
+    m_currentDirectoryCluster = 2;
+    m_dirStackSize = 1;
+
+    strncpy(m_dirStack[0].name, "/", MAX_PATH - 1);
+    strncpy(m_dirStack[0].path, "/", MAX_PATH - 1);
+    m_dirStack[0].cluster = ROOT_CLUSTER;
+}
+
+CFat32FileSystem& CFat32FileSystem::instance() {
+    static CFat32FileSystem instance;
+    return instance;
+}
+
+bool CFat32FileSystem::push_directory(const char* name, const char* path, uint32_t cluster) {
+    if (m_dirStackSize >= MAX_DIR_STACK) return false;
+
+    strncpy(m_dirStack[m_dirStackSize].name, name, MAX_PATH - 1);
+    strncpy(m_dirStack[m_dirStackSize].path, path, MAX_PATH - 1);
+    m_dirStack[m_dirStackSize].cluster = cluster;
+    m_dirStackSize++;
+
+    return true;
+}
+
+bool CFat32FileSystem::pop_directory() {
+    if (m_dirStackSize <= 1) return false;
+
+    m_dirStackSize--;
+    strncpy(m_currentPath, m_dirStack[m_dirStackSize - 1].path, MAX_PATH - 1);
+    strncpy(m_currentDirName, m_dirStack[m_dirStackSize - 1].name, MAX_PATH - 1);
+    m_currentDirectoryCluster = m_dirStack[m_dirStackSize - 1].cluster;
+
+    return true;
+}
+
+const CFat32FileSystem::SDirStackEntry* CFat32FileSystem::get_current_dir_entry() const {
+    if (m_dirStackSize == 0) return nullptr;
+    return &m_dirStack[m_dirStackSize - 1];
+}
+
+const CFat32FileSystem::SDirStackEntry* CFat32FileSystem::get_parent_dir_entry() const {
+    if (m_dirStackSize <= 1) return nullptr;
+    return &m_dirStack[m_dirStackSize - 2];
+}
+
+const char* CFat32FileSystem::get_current_path() const {
+    return m_currentPath;
+}
+
+void CFat32FileSystem::set_current_path(const char* path) {
+    if (!path) {
+        m_currentPath[0] = '/';
+        m_currentPath[1] = '\0';
+        return;
+    }
+
+    strncpy(m_currentPath, path, MAX_PATH - 1);
+    m_currentPath[MAX_PATH - 1] = '\0';
+}
+
+const char* CFat32FileSystem::get_current_dir_name() const {
+    return m_currentDirName;
+}
+
+void CFat32FileSystem::set_current_dir_name(const char* name) {
+    if (!name) {
+        m_currentDirName[0] = '/';
+        m_currentDirName[1] = '\0';
+        return;
+    }
+
+    strncpy(m_currentDirName, name, MAX_PATH - 1);
+    m_currentDirName[MAX_PATH - 1] = '\0';
+}
+
+uint32_t CFat32FileSystem::get_current_directory_cluster() const {
+    return m_currentDirectoryCluster;
+}
+
+void CFat32FileSystem::set_current_directory_cluster(uint32_t cluster) {
+    m_currentDirectoryCluster = cluster;
+}
+
 bool CFat32FileSystem::initialize(const uint8_t* bootSector) {
     if (!bootSector) return false;
 
