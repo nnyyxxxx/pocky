@@ -13,6 +13,7 @@ struct SAlias {
 
 static SAlias aliases[100];
 static size_t alias_count = 0;
+static uint32_t last_file_size = 0;
 
 void load_aliases() {
     auto& fs = fs::CFat32FileSystem::instance();
@@ -70,6 +71,17 @@ void load_aliases() {
 }
 
 const char* get_alias(const char* name) {
+    auto& fs = fs::CFat32FileSystem::instance();
+    uint32_t cluster, size;
+    uint8_t attributes;
+
+    if (fs.findFile("/shell/config", cluster, size, attributes)) {
+        if (size != last_file_size) {
+            load_aliases();
+            last_file_size = size;
+        }
+    }
+
     for (size_t i = 0; i < alias_count; i++) {
         if (strcmp(aliases[i].name, name) == 0) return aliases[i].value;
     }
