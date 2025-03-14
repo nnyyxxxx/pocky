@@ -92,7 +92,6 @@ bool TextEditor::open(const char* filename) {
     bool file_exists = fs.findFile(filename, cluster, size, attributes);
 
     if (!file_exists) {
-        if (!fs.createFile(filename, 0)) return false;
         m_buffer_size = 0;
         m_buffer[0] = '\0';
     } else {
@@ -141,8 +140,10 @@ bool TextEditor::save() {
     auto& fs = fs::CFat32FileSystem::instance();
     uint32_t cluster, size;
     uint8_t attributes;
-    if (!fs.findFile(m_filename, cluster, size, attributes))
+    if (!fs.findFile(m_filename, cluster, size, attributes)) {
         if (!fs.createFile(m_filename, 0)) return false;
+        if (!fs.findFile(m_filename, cluster, size, attributes)) return false;
+    }
 
     if (!fs.writeFile(cluster, reinterpret_cast<uint8_t*>(m_buffer), m_buffer_size)) return false;
 
