@@ -54,7 +54,7 @@ size_t TextEditor::get_line_length(size_t row) const {
         pos++;
     }
 
-    return 0;
+    return static_cast<size_t>(-1);
 }
 
 void TextEditor::update_cursor_pos() {
@@ -243,14 +243,16 @@ void TextEditor::process_keypress(char c) {
 
         if (c == 'k' && m_cursor_row > 0) {
             size_t prev_line_length = get_line_length(m_cursor_row - 1);
-            m_cursor_row--;
-            m_cursor_col = m_cursor_col > prev_line_length ? prev_line_length : m_cursor_col;
-            update_cursor_pos();
-            if (m_cursor_row < m_screen_row) {
-                m_screen_row = m_cursor_row;
-                render();
-            } else
-                update_cursor();
+            if (prev_line_length != static_cast<size_t>(-1)) {
+                m_cursor_row--;
+                m_cursor_col = m_cursor_col > prev_line_length ? prev_line_length : m_cursor_col;
+                update_cursor_pos();
+                if (m_cursor_row < m_screen_row) {
+                    m_screen_row = m_cursor_row;
+                    render();
+                } else
+                    update_cursor();
+            }
             return;
         }
 
