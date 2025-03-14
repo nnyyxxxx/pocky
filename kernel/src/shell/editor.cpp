@@ -15,9 +15,11 @@ namespace editor {
 
 namespace {
 constexpr uint8_t STATUS_COLOR = 0x70;
-constexpr uint8_t TEXT_COLOR = 0x07;
+constexpr uint8_t STATUS_TEXT_COLOR = 0xF0;
+constexpr uint8_t TEXT_COLOR = 0x0F;
 constexpr uint8_t LINE_NUMBER_CURRENT_COLOR = 0x0F;
 constexpr uint8_t LINE_NUMBER_COLOR = 0x08;
+constexpr uint8_t SELECTION_COLOR = 0x70;
 constexpr size_t TERMINAL_WIDTH = 80;
 constexpr size_t TERMINAL_HEIGHT = 25;
 constexpr size_t STATUS_LINE = TERMINAL_HEIGHT - 1;
@@ -27,6 +29,9 @@ constexpr uint8_t CURSOR_NORMAL_START = 0;
 constexpr uint8_t CURSOR_NORMAL_END = 15;
 constexpr uint8_t CURSOR_INSERT_START = 14;
 constexpr uint8_t CURSOR_INSERT_END = 15;
+
+constexpr char SHIFT_J = 'J';
+constexpr char SHIFT_K = 'K';
 
 inline bool is_ctrl_key(char c, char key) {
     return (c == (key & 0x1f));
@@ -186,37 +191,83 @@ void TextEditor::close() {
     print_prompt();
 }
 
+bool TextEditor::is_line_selected(size_t row) const {
+    if (!m_has_selection) return false;
+
+    if (m_selection_start_row <= m_selection_end_row)
+        return row >= m_selection_start_row && row <= m_selection_end_row;
+    else
+        return row >= m_selection_end_row && row <= m_selection_start_row;
+}
+
+void TextEditor::switch_to_visual_mode() {
+    m_mode = EditorMode::VISUAL;
+    m_has_selection = true;
+    m_selection_start_row = m_cursor_row;
+    m_selection_end_row = m_cursor_row;
+
+    outb(VGA_CTRL_PORT, 0x0A);
+    outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xC0) | 15);
+    outb(VGA_CTRL_PORT, 0x0B);
+    outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xE0) | 0);
+
+    render();
+}
+
+void TextEditor::switch_to_normal_mode() {
+    m_mode = EditorMode::NORMAL;
+    m_has_selection = false;
+
+    outb(VGA_CTRL_PORT, 0x0A);
+    outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xC0) | CURSOR_NORMAL_START);
+    outb(VGA_CTRL_PORT, 0x0B);
+    outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xE0) | CURSOR_NORMAL_END);
+
+    render();
+}
+
+void TextEditor::switch_to_insert_mode() {
+    m_mode = EditorMode::INSERT;
+    m_has_selection = false;
+
+    outb(VGA_CTRL_PORT, 0x0A);
+    outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xC0) | CURSOR_INSERT_START);
+    outb(VGA_CTRL_PORT, 0x0B);
+    outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xE0) | CURSOR_INSERT_END);
+
+    render();
+}
+
 void TextEditor::process_keypress(char c) {
     if (!m_active) return;
 
     if (c == 0x1B) {
-        m_mode = EditorMode::NORMAL;
-        outb(VGA_CTRL_PORT, 0x0A);
-        outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xC0) | CURSOR_NORMAL_START);
-        outb(VGA_CTRL_PORT, 0x0B);
-        outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xE0) | CURSOR_NORMAL_END);
-        render();
+        switch_to_normal_mode();
         return;
     }
 
     if (m_mode == EditorMode::NORMAL) {
         if (c == 'i') {
-            m_mode = EditorMode::INSERT;
-            outb(VGA_CTRL_PORT, 0x0A);
-            outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xC0) | CURSOR_INSERT_START);
-            outb(VGA_CTRL_PORT, 0x0B);
-            outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xE0) | CURSOR_INSERT_END);
-            render();
+            switch_to_insert_mode();
             return;
         }
 
         if (c == 'a') {
-            m_mode = EditorMode::INSERT;
-            outb(VGA_CTRL_PORT, 0x0A);
-            outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xC0) | CURSOR_INSERT_START);
-            outb(VGA_CTRL_PORT, 0x0B);
-            outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xE0) | CURSOR_INSERT_END);
-            render();
+            switch_to_insert_mode();
+            return;
+        }
+
+        if (c == 's') {
+            if (m_cursor_pos < m_buffer_size) {
+                delete_char();
+                m_modified = true;
+            }
+            switch_to_insert_mode();
+            return;
+        }
+
+        if (c == SHIFT_J || c == SHIFT_K) {
+            switch_to_visual_mode();
             return;
         }
 
@@ -352,6 +403,100 @@ void TextEditor::process_keypress(char c) {
             return;
         }
     }
+
+    if (m_mode == EditorMode::VISUAL) {
+        if (c == 'a') {
+            switch_to_insert_mode();
+            return;
+        }
+
+        if (c == 's') {
+            size_t start_row = m_selection_start_row < m_selection_end_row ? m_selection_start_row
+                                                                           : m_selection_end_row;
+            size_t end_row = m_selection_start_row < m_selection_end_row ? m_selection_end_row
+                                                                         : m_selection_start_row;
+
+            size_t start_pos = 0;
+            size_t current_row = 0;
+
+            while (current_row < start_row && start_pos < m_buffer_size) {
+                if (m_buffer[start_pos] == '\n') current_row++;
+                start_pos++;
+            }
+
+            if (start_pos > 0 && m_buffer[start_pos - 1] == '\n')
+                ;
+            else {
+                while (start_pos > 0 && m_buffer[start_pos - 1] != '\n')
+                    start_pos--;
+            }
+
+            size_t end_pos = start_pos;
+            current_row = start_row;
+
+            while (current_row <= end_row && end_pos < m_buffer_size) {
+                if (m_buffer[end_pos] == '\n') {
+                    current_row++;
+                    if (current_row > end_row) break;
+                }
+                end_pos++;
+            }
+
+            if (end_pos > start_pos) {
+                memmove(&m_buffer[start_pos], &m_buffer[end_pos], m_buffer_size - end_pos);
+                m_buffer_size -= (end_pos - start_pos);
+                m_cursor_pos = start_pos;
+
+                m_cursor_row = start_row;
+
+                size_t line_start = start_pos;
+                while (line_start > 0 && m_buffer[line_start - 1] != '\n')
+                    line_start--;
+
+                m_cursor_col = m_cursor_pos - line_start;
+
+                m_modified = true;
+            }
+
+            switch_to_insert_mode();
+            return;
+        }
+
+        if (c == SHIFT_J) {
+            size_t next_line_length = get_line_length(m_cursor_row + 1);
+            if (next_line_length != static_cast<size_t>(-1)) {
+                m_cursor_row++;
+                m_cursor_col = m_cursor_col > next_line_length ? next_line_length : m_cursor_col;
+                update_cursor_pos();
+                m_selection_end_row = m_cursor_row;
+
+                if (m_cursor_row >= m_screen_row + TERMINAL_HEIGHT - 1) {
+                    m_screen_row = m_cursor_row - TERMINAL_HEIGHT + 2;
+                }
+
+                render();
+            }
+            return;
+        }
+
+        if (c == SHIFT_K) {
+            if (m_cursor_row > 0) {
+                size_t prev_line_length = get_line_length(m_cursor_row - 1);
+                if (prev_line_length != static_cast<size_t>(-1)) {
+                    m_cursor_row--;
+                    m_cursor_col =
+                        m_cursor_col > prev_line_length ? prev_line_length : m_cursor_col;
+                    update_cursor_pos();
+                    m_selection_end_row = m_cursor_row;
+
+                    if (m_cursor_row < m_screen_row) m_screen_row = m_cursor_row;
+
+                    render();
+                }
+            }
+            return;
+        }
+    }
 }
 
 void TextEditor::render() {
@@ -431,8 +576,12 @@ void TextEditor::render() {
 
     current_row = 0;
     col = LINE_NUMBER_WIDTH + 1;
+    abs_row = m_screen_row;
 
     for (size_t i = line_start; i < m_buffer_size && current_row < visible_rows; i++) {
+        bool is_selected = is_line_selected(abs_row);
+        uint8_t text_color = is_selected ? SELECTION_COLOR : TEXT_COLOR;
+
         if (m_buffer[i] == '\n') {
             while (col < TERMINAL_WIDTH) {
                 terminal_putchar_at(' ', TEXT_COLOR, col, current_row);
@@ -440,16 +589,15 @@ void TextEditor::render() {
             }
             current_row++;
             col = LINE_NUMBER_WIDTH + 1;
+            abs_row++;
         } else {
-            terminal_putchar_at(m_buffer[i], TEXT_COLOR, col, current_row);
+            terminal_putchar_at(m_buffer[i], text_color, col, current_row);
             col++;
             if (col >= TERMINAL_WIDTH) {
                 col = LINE_NUMBER_WIDTH + 1;
                 current_row++;
             }
         }
-
-        if (current_row >= visible_rows) break;
     }
 
     while (current_row < visible_rows) {
@@ -462,6 +610,23 @@ void TextEditor::render() {
     }
 
     display_status_line();
+
+    if (m_mode == EditorMode::INSERT) {
+        outb(VGA_CTRL_PORT, 0x0A);
+        outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xC0) | CURSOR_INSERT_START);
+        outb(VGA_CTRL_PORT, 0x0B);
+        outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xE0) | CURSOR_INSERT_END);
+    } else if (m_mode == EditorMode::VISUAL) {
+        outb(VGA_CTRL_PORT, 0x0A);
+        outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xC0) | 15);
+        outb(VGA_CTRL_PORT, 0x0B);
+        outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xE0) | 0);
+    } else if (m_mode == EditorMode::NORMAL) {
+        outb(VGA_CTRL_PORT, 0x0A);
+        outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xC0) | CURSOR_NORMAL_START);
+        outb(VGA_CTRL_PORT, 0x0B);
+        outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xE0) | CURSOR_NORMAL_END);
+    }
 
     update_cursor();
 }
@@ -608,8 +773,10 @@ void TextEditor::display_status_line() {
     char mode_indicator[12] = {0};
     if (m_mode == EditorMode::NORMAL)
         strcpy(mode_indicator, "[NORMAL]");
-    else
+    else if (m_mode == EditorMode::INSERT)
         strcpy(mode_indicator, "[INSERT]");
+    else if (m_mode == EditorMode::VISUAL)
+        strcpy(mode_indicator, "[VISUAL]");
 
     strcpy(status, " ");
     strcat(status, m_filename);
@@ -617,36 +784,77 @@ void TextEditor::display_status_line() {
     strcat(status, modified_indicator);
     strcat(status, " ");
     strcat(status, mode_indicator);
-    strcat(status, " | lines: ");
 
-    char row_str[16] = {0};
-    size_t row_val = m_cursor_row + 1;
-    size_t i = 0;
-    do {
-        row_str[i++] = '0' + (row_val % 10);
-        row_val /= 10;
-    } while (row_val > 0);
+    if (m_mode == EditorMode::VISUAL && m_has_selection) {
+        size_t selected_lines = 0;
 
-    for (size_t j = 0; j < i / 2; j++) {
-        char temp = row_str[j];
-        row_str[j] = row_str[i - j - 1];
-        row_str[i - j - 1] = temp;
+        if (m_selection_start_row <= m_selection_end_row)
+            selected_lines = m_selection_end_row - m_selection_start_row + 1;
+        else
+            selected_lines = m_selection_start_row - m_selection_end_row + 1;
+
+        size_t i = 0;
+        size_t tmp = selected_lines;
+        char num_str[16] = {0};
+
+        do {
+            num_str[i++] = '0' + (tmp % 10);
+            tmp /= 10;
+        } while (tmp > 0);
+
+        for (size_t j = 0; j < i / 2; j++) {
+            char temp = num_str[j];
+            num_str[j] = num_str[i - j - 1];
+            num_str[i - j - 1] = temp;
+        }
+
+        strcat(status, " | Selected: ");
+        strcat(status, num_str);
+        strcat(status, " lines");
+    } else {
+        strcat(status, " | line: ");
+
+        char row_str[16] = {0};
+        size_t row_val = m_cursor_row + 1;
+        size_t i = 0;
+        do {
+            row_str[i++] = '0' + (row_val % 10);
+            row_val /= 10;
+        } while (row_val > 0);
+
+        for (size_t j = 0; j < i / 2; j++) {
+            char temp = row_str[j];
+            row_str[j] = row_str[i - j - 1];
+            row_str[i - j - 1] = temp;
+        }
+
+        strcat(status, row_str);
     }
 
-    strcat(status, row_str);
     if (m_mode == EditorMode::NORMAL)
         strcat(status, " | Ctrl-S: Save | Ctrl-Q: Quit");
+    else if (m_mode == EditorMode::VISUAL)
+        strcat(status, " | Shift-J/K: Select | Esc: Exit selection");
     else
         strcat(status, " | Esc: Normal mode");
 
     for (size_t i = 0; i < TERMINAL_WIDTH; i++) {
-        terminal_putchar_at(i < strlen(status) ? status[i] : ' ', STATUS_COLOR, i, STATUS_LINE);
+        terminal_putchar_at(i < strlen(status) ? status[i] : ' ', STATUS_TEXT_COLOR, i,
+                            STATUS_LINE);
     }
 
     update_cursor();
 }
 
 void TextEditor::update_cursor() {
+    if (m_mode == EditorMode::VISUAL) {
+        outb(VGA_CTRL_PORT, 0x0A);
+        outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xC0) | 15);
+        outb(VGA_CTRL_PORT, 0x0B);
+        outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xE0) | 0);
+        return;
+    }
+
     size_t screen_y = m_cursor_row - m_screen_row;
     size_t screen_x = m_cursor_col + LINE_NUMBER_WIDTH + 1;
 
