@@ -384,25 +384,39 @@ void CFat32FileSystem::readFile(uint32_t startCluster, uint8_t* buffer, size_t b
 
     uint32_t currentCluster = startCluster;
     size_t bytesRead = 0;
+    uint8_t* sectorBuffer = new uint8_t[m_bpb.m_bytesPerSector];
+
     while (bytesRead < bufferSize) {
         uint32_t firstSector = (currentCluster - 2) * m_bpb.m_sectorsPerCluster + m_firstDataSector;
+
         for (uint32_t i = 0; i < m_bpb.m_sectorsPerCluster && bytesRead < bufferSize; ++i) {
-            if (!readSector(firstSector + i, &buffer[bytesRead])) {
+            if (!readSector(firstSector + i, sectorBuffer)) {
                 printf("FAT32: Failed to read file data at cluster %u\n", currentCluster);
+                delete[] sectorBuffer;
                 return;
             }
-            bytesRead += m_bpb.m_bytesPerSector;
+
+            size_t bytesToCopy = bufferSize - bytesRead;
+            if (bytesToCopy > m_bpb.m_bytesPerSector) bytesToCopy = m_bpb.m_bytesPerSector;
+
+            memcpy(&buffer[bytesRead], sectorBuffer, bytesToCopy);
+            bytesRead += bytesToCopy;
         }
+
+        if (bytesRead >= bufferSize) break;
 
         uint32_t nextCluster = readFatEntry(currentCluster);
         if (nextCluster >= 0x0FFFFFF8) break;
         if (nextCluster == 0x0FFFFFF7) {
             printf("FAT32: Bad cluster detected at %u during file read\n", currentCluster);
-            break;
+            delete[] sectorBuffer;
+            return;
         }
 
         currentCluster = nextCluster;
     }
+
+    delete[] sectorBuffer;
 }
 
 bool CFat32FileSystem::writeFile(uint32_t startCluster, const uint8_t* data, size_t dataSize) {
@@ -1170,7 +1184,7 @@ bool CFat32FileSystem::findFileInDirectory(uint32_t dirCluster, const char* name
 
                 if (strcmp(entryName, name) == 0) {
                     cluster = (entry[26] | (entry[27] << 8));
-                    size = (entry[28] | (entry[29] << 8) | (entry[30] << 16) | (entry[31] << 24));
+                    size = entry[28] | (entry[29] << 8) | (entry[30] << 16) | (entry[31] << 24);
                     attributes = entry[11];
                     return true;
                 }
