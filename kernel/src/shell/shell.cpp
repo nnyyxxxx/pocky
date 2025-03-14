@@ -319,13 +319,7 @@ void process_command() {
         return;
     }
 
-    if (history_count < MAX_HISTORY_SIZE)
-        memcpy(command_history[history_count++], input_buffer, input_pos + 1);
-    else {
-        memmove(command_history[0], command_history[1],
-                sizeof(command_history[0]) * (MAX_HISTORY_SIZE - 1));
-        memcpy(command_history[MAX_HISTORY_SIZE - 1], input_buffer, input_pos + 1);
-    }
+    commands::append_to_history_file(input_buffer);
 
     char* current_cmd = input_buffer;
     while (current_cmd && *current_cmd) {
@@ -423,9 +417,7 @@ void process_command() {
 
 void init_shell() {
     memset(input_buffer, 0, sizeof(input_buffer));
-    memset(command_history, 0, sizeof(command_history));
     input_pos = 0;
-    history_count = 0;
 
     auto& pm = kernel::ProcessManager::instance();
     shell_pid = pm.create_process("shell", 0);
@@ -440,6 +432,7 @@ void init_shell() {
 
     uint32_t cluster, size;
     uint8_t attributes;
+
     if (!fs.findFile("tmp", cluster, size, attributes)) fs.createDirectory("tmp");
 
     const char* welcome_msg = "Welcome to the kernel!\n";

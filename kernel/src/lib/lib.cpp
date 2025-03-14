@@ -165,6 +165,35 @@ void operator delete[](void* ptr, size_t) noexcept {
     HeapAllocator::instance().free(ptr);
 }
 
+static char* strtok_ptr = nullptr;
+
+extern "C" char* strtok(char* str, const char* delimiters) {
+    char* current_pos = str ? str : strtok_ptr;
+
+    if (!current_pos || *current_pos == '\0') return nullptr;
+
+    while (*current_pos && strchr(delimiters, *current_pos))
+        current_pos++;
+
+    if (*current_pos == '\0') {
+        strtok_ptr = current_pos;
+        return nullptr;
+    }
+
+    char* token_start = current_pos;
+
+    while (*current_pos && !strchr(delimiters, *current_pos))
+        current_pos++;
+
+    if (*current_pos != '\0') {
+        *current_pos = '\0';
+        strtok_ptr = current_pos + 1;
+    } else
+        strtok_ptr = current_pos;
+
+    return token_start;
+}
+
 bool match_wildcard(const char* pattern, const char* str) {
     if (!pattern || !str) return false;
 

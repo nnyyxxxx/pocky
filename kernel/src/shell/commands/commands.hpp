@@ -24,4 +24,6 @@ void cmd_ps();
 void cmd_ipc_test();
 void cmd_cores();
 
+void append_to_history_file(const char* command);
+
 }  // namespace commands

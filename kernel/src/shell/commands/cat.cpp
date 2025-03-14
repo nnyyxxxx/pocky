@@ -63,7 +63,6 @@ void cmd_cat(const char* path) {
     }
 
     delete[] buffer;
-    printf("\n");
     pm.terminate_process(pid);
 }
 

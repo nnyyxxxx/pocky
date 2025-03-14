@@ -1136,7 +1136,7 @@ bool CFat32FileSystem::findFile(const char* name, uint32_t& cluster, uint32_t& s
 
     const char* slash = strchr(name, '/');
     if (slash) {
-        char dirname[13] = {0};
+        char dirname[MAX_PATH] = {0};
         strncpy(dirname, name, slash - name);
 
         uint32_t dirCluster;
@@ -1147,7 +1147,51 @@ bool CFat32FileSystem::findFile(const char* name, uint32_t& cluster, uint32_t& s
 
         if (!(dirAttrs & 0x10)) return false;
 
-        return findFile(slash + 1, cluster, size, attributes);
+        if (slash[1] != '\0')
+            return findFile(slash + 1, cluster, size, attributes, dirCluster);
+        else {
+            cluster = dirCluster;
+            size = dirSize;
+            attributes = dirAttrs;
+            return true;
+        }
+    }
+
+    return findFileInDirectory(searchCluster, name, cluster, size, attributes);
+}
+
+bool CFat32FileSystem::findFile(const char* name, uint32_t& cluster, uint32_t& size,
+                                uint8_t& attributes, uint32_t startCluster) {
+    uint32_t searchCluster = startCluster;
+
+    if (!*name) {
+        cluster = searchCluster;
+        size = 0;
+        attributes = 0x10;
+        return true;
+    }
+
+    const char* slash = strchr(name, '/');
+    if (slash) {
+        char dirname[MAX_PATH] = {0};
+        strncpy(dirname, name, slash - name);
+
+        uint32_t dirCluster;
+        uint32_t dirSize;
+        uint8_t dirAttrs;
+        if (!findFileInDirectory(searchCluster, dirname, dirCluster, dirSize, dirAttrs))
+            return false;
+
+        if (!(dirAttrs & 0x10)) return false;
+
+        if (slash[1] != '\0')
+            return findFile(slash + 1, cluster, size, attributes, dirCluster);
+        else {
+            cluster = dirCluster;
+            size = dirSize;
+            attributes = dirAttrs;
+            return true;
+        }
     }
 
     return findFileInDirectory(searchCluster, name, cluster, size, attributes);
