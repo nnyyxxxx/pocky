@@ -29,7 +29,6 @@ set(KERNEL_CPP_SRCS
     ${KERNEL_SRC}/shell/vga.cpp
     ${KERNEL_SRC}/shell/terminal.cpp
     ${KERNEL_SRC}/drivers/keyboard.cpp
-    ${KERNEL_SRC}/drivers/mouse.cpp
     ${KERNEL_SRC}/drivers/ata.cpp
     ${KERNEL_SRC}/hw/pic.cpp
     ${KERNEL_SRC}/shell/shell.cpp
@@ -48,7 +47,6 @@ set(KERNEL_CPP_SRCS
     ${KERNEL_SRC}/hw/timer.cpp
     ${KERNEL_SRC}/shell/editor.cpp
     ${KERNEL_SRC}/core/multiboot2.cpp
-    ${KERNEL_SRC}/shell/graphics.cpp
     ${KERNEL_SRC}/core/process.cpp
     ${KERNEL_SRC}/hw/rtc.cpp
     ${KERNEL_SRC}/shell/pager.cpp
@@ -56,6 +54,27 @@ set(KERNEL_CPP_SRCS
     ${KERNEL_SRC}/core/scheduler.cpp
     ${KERNEL_SRC}/core/ipc.cpp
     ${KERNEL_SRC}/lib/cxxabi.cpp
+    ${KERNEL_SRC}/shell/commands/help.cpp
+    ${KERNEL_SRC}/shell/commands/echo.cpp
+    ${KERNEL_SRC}/shell/commands/crash.cpp
+    ${KERNEL_SRC}/shell/commands/shutdown.cpp
+    ${KERNEL_SRC}/shell/commands/memory.cpp
+    ${KERNEL_SRC}/shell/commands/ls.cpp
+    ${KERNEL_SRC}/shell/commands/mkdir.cpp
+    ${KERNEL_SRC}/shell/commands/cd.cpp
+    ${KERNEL_SRC}/shell/commands/cat.cpp
+    ${KERNEL_SRC}/shell/commands/mv.cpp
+    ${KERNEL_SRC}/shell/commands/rm.cpp
+    ${KERNEL_SRC}/shell/commands/touch.cpp
+    ${KERNEL_SRC}/shell/commands/edit.cpp
+    ${KERNEL_SRC}/shell/commands/history.cpp
+    ${KERNEL_SRC}/shell/commands/uptime.cpp
+    ${KERNEL_SRC}/shell/commands/time.cpp
+    ${KERNEL_SRC}/shell/commands/ps.cpp
+    ${KERNEL_SRC}/shell/commands/pkill.cpp
+    ${KERNEL_SRC}/shell/commands/less.cpp
+    ${KERNEL_SRC}/shell/commands/ipc_test.cpp
+    ${KERNEL_SRC}/shell/commands/cores.cpp
 )
 
 set(KERNEL_ASM_SRCS
@@ -65,7 +84,6 @@ set(KERNEL_ASM_SRCS
     ${KERNEL_SRC}/asm/isr.asm
     ${KERNEL_SRC}/asm/vm.asm
     ${KERNEL_SRC}/asm/timer.asm
-    ${KERNEL_SRC}/asm/mouse.asm
     ${KERNEL_SRC}/asm/context.asm
     ${KERNEL_SRC}/asm/ap_boot.asm
 )

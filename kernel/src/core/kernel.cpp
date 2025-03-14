@@ -2,7 +2,6 @@
 #include "elf.hpp"
 #include "fs/fat32.hpp"
 #include "gdt.hpp"
-#include "graphics.hpp"
 #include "heap.hpp"
 #include "hw/acpi.hpp"
 #include "hw/smp.hpp"
@@ -12,7 +11,6 @@
 #include "keyboard.hpp"
 #include "lib/string.hpp"
 #include "lib/vector.hpp"
-#include "mouse.hpp"
 #include "multiboot2.hpp"
 #include "physical_memory.hpp"
 #include "pic.hpp"
@@ -106,9 +104,7 @@ extern "C" void kernel_main() {
 
     register_keyboard_handler(process_keypress);
 
-    init_mouse();
-
-    const char* msg10 = "[10] Mouse Init Done";
+    const char* msg10 = "[10] Keyboard Handler Registered";
     for (int i = 0; msg10[i] != '\0'; i++) {
         vga[i + 720] = 0x0F00 | msg10[i];
     }
@@ -180,8 +176,6 @@ extern "C" void kernel_main() {
     kernel::DynamicLinker::initialize();
 
     terminal_initialize();
-
-    graphics_initialize();
 
     init_shell();
 

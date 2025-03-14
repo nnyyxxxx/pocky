@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include "commands/commands.hpp"
 #include "core/ipc.hpp"
 #include "core/process.hpp"
 #include "core/scheduler.hpp"
@@ -10,7 +11,6 @@
 #include "drivers/keyboard.hpp"
 #include "editor.hpp"
 #include "fs/fat32.hpp"
-#include "graphics.hpp"
 #include "io.hpp"
 #include "lib/lib.hpp"
 #include "lib/string.hpp"
@@ -63,12 +63,9 @@ pid_t shell_pid = 0;
 char command_history[MAX_HISTORY_SIZE][256] = {0};
 size_t history_count = 0;
 
-constexpr size_t MAX_PATH = 256;
-constexpr uint32_t ROOT_CLUSTER = 2;
-
 namespace {
 
-void split_path(const char* input, char* first, char* second) {
+[[maybe_unused]] void split_path(const char* input, char* first, char* second) {
     const char* space = strchr(input, ' ');
     if (!space) {
         strcpy(first, input);
@@ -85,7 +82,7 @@ void split_path(const char* input, char* first, char* second) {
     strcpy(second, space);
 }
 
-void list_callback(const char* name, uint8_t attributes, uint32_t size) {
+[[maybe_unused]] void list_callback(const char* name, uint8_t attributes, uint32_t size) {
     if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) return;
 
     if (attributes & 0x10)
@@ -124,121 +121,6 @@ void handle_wildcard_command(const char* pattern, F cmd_fn) {
 
 }  // namespace
 
-void cmd_help() {
-    auto& pm = kernel::ProcessManager::instance();
-    pid_t pid = pm.create_process("help", shell_pid);
-    const char* help_text = "Available commands:\n\n"
-                            "  help     - Display this help message\n"
-                            "  echo     - Echo arguments\n"
-                            "  clear    - Clear the screen\n"
-                            "  crash    - Trigger a kernel panic (for testing)\n"
-                            "  shutdown - Power off the system\n"
-                            "  memory   - Display memory usage information\n"
-                            "  ls       - List directory contents\n"
-                            "  mkdir    - Create a new directory\n"
-                            "  cd       - Change current directory\n"
-                            "  cat      - Display file contents\n"
-                            "  mv       - Move or rename a file\n"
-                            "  rm       - Remove a file or directory\n"
-                            "  touch    - Create an empty file\n"
-                            "  edit     - Edit a file\n"
-                            "  history  - Display command history\n"
-                            "  uptime   - Display system uptime\n"
-                            "  time     - Display system time\n"
-                            "  graphics - Enter graphics mode\n"
-                            "  ps       - List running processes\n"
-                            "  pkill    - Kill a process\n"
-                            "  ipctest  - Run IPC test\n"
-                            "  cores    - List CPU cores\n";
-
-    pager::show_text(help_text);
-
-    pm.terminate_process(pid);
-}
-
-void cmd_echo(const char* args) {
-    auto& pm = kernel::ProcessManager::instance();
-    pid_t pid = pm.create_process("echo", shell_pid);
-
-    printf(args);
-    printf("\n");
-
-    pm.terminate_process(pid);
-}
-
-void cmd_crash() {
-    auto& pm = kernel::ProcessManager::instance();
-    pid_t pid = pm.create_process("crash", shell_pid);
-
-    asm volatile("ud2");
-
-    pm.terminate_process(pid);
-}
-
-void cmd_shutdown() {
-    auto& pm = kernel::ProcessManager::instance();
-    pid_t pid = pm.create_process("shutdown", shell_pid);
-
-    printf("\nShutting down the system...\n");
-
-    outb(0x604, 0x00);
-    outb(0x604, 0x01);
-
-    outb(0xB004, 0x00);
-    outb(0x4004, 0x00);
-
-    outb(0x64, 0xFE);
-
-    printf("Shutdown failed.\n");
-
-    asm volatile("cli");
-    for (;;) {
-        asm volatile("hlt");
-    }
-
-    pm.terminate_process(pid);
-}
-
-void cmd_memory() {
-    auto& pm = kernel::ProcessManager::instance();
-    pid_t pid = pm.create_process("memory", shell_pid);
-
-    auto& pmm = PhysicalMemoryManager::instance();
-
-    size_t free_frames = pmm.get_free_frames();
-    size_t total_frames = pmm.get_total_frames();
-
-    if (total_frames == 0 || free_frames > total_frames) {
-        set_red();
-        printf("Error: Invalid memory state\n");
-        reset_color();
-        pm.terminate_process(pid);
-        return;
-    }
-
-    size_t used_frames = total_frames - free_frames;
-
-    constexpr size_t max_size = static_cast<size_t>(-1);
-    if (total_frames > max_size / PhysicalMemoryManager::PAGE_SIZE) {
-        set_red();
-        printf("Error: Memory size too large to represent\n");
-        reset_color();
-        pm.terminate_process(pid);
-        return;
-    }
-
-    size_t total_bytes = total_frames * PhysicalMemoryManager::PAGE_SIZE;
-    size_t used_bytes = used_frames * PhysicalMemoryManager::PAGE_SIZE;
-
-    constexpr size_t bytes_per_mb = 1024 * 1024;
-    double total_mb = static_cast<double>(total_bytes) / bytes_per_mb;
-    double used_mb = static_cast<double>(used_bytes) / bytes_per_mb;
-
-    printf("%.2f MB used of available %.2f MB\n", used_mb, total_mb);
-
-    pm.terminate_process(pid);
-}
-
 void initialize_filesystem() {
     auto& fs = fs::CFat32FileSystem::instance();
     if (!fs.mount()) printf("Failed to mount filesystem\n");
@@ -261,480 +143,6 @@ void initialize_filesystem() {
     fs.set_current_path(saved_path);
     fs.set_current_dir_name(saved_dir_name);
     fs.set_current_directory_cluster(saved_cluster);
-}
-
-void cmd_ls(const char* path) {
-    auto& pm = kernel::ProcessManager::instance();
-    pid_t pid = pm.create_process("ls", shell_pid);
-
-    auto& fs = fs::CFat32FileSystem::instance();
-    uint8_t buffer[1024];
-
-    uint32_t cluster = 0;
-    uint32_t size = 0;
-    uint8_t attributes = 0;
-
-    if (path && *path) {
-        if (!fs.findFile(path, cluster, size, attributes)) {
-            printf("Directory not found: %s\n", path);
-            pm.terminate_process(pid);
-            return;
-        }
-
-        if (!(attributes & 0x10)) {
-            printf("Not a directory: %s\n", path);
-            pm.terminate_process(pid);
-            return;
-        }
-    } else
-        cluster = fs.get_current_directory_cluster();
-
-    fs.readFile(cluster, buffer, sizeof(buffer));
-
-    for (size_t i = 0; i < sizeof(buffer); i += 32) {
-        uint8_t* entry = &buffer[i];
-        if (entry[0] == 0x00) break;
-        if (entry[0] == 0xE5) continue;
-
-        char name[13] = {0};
-        memcpy(name, entry, 11);
-
-        for (int j = 10; j >= 0; j--) {
-            if (name[j] == ' ')
-                name[j] = '\0';
-            else
-                break;
-        }
-
-        if (name[0] == '\0') continue;
-
-        uint8_t attributes = entry[11];
-        uint32_t size = (entry[28] | (entry[29] << 8) | (entry[30] << 16) | (entry[31] << 24));
-
-        list_callback(name, attributes, size);
-    }
-
-    pm.terminate_process(pid);
-}
-
-void cmd_mkdir(const char* path) {
-    auto& pm = kernel::ProcessManager::instance();
-    pid_t pid = pm.create_process("mkdir", shell_pid);
-
-    if (!path || !*path) {
-        pm.terminate_process(pid);
-        return;
-    }
-
-    auto& fs = fs::CFat32FileSystem::instance();
-    fs.createDirectory(path);
-
-    pm.terminate_process(pid);
-}
-
-void cmd_cd(const char* path) {
-    auto& pm = kernel::ProcessManager::instance();
-    pid_t pid = pm.create_process("cd", shell_pid);
-
-    if (!path || !*path) {
-        auto& fs = fs::CFat32FileSystem::instance();
-        fs.set_current_path("/");
-        fs.set_current_dir_name("/");
-        fs.set_current_directory_cluster(ROOT_CLUSTER);
-        pm.terminate_process(pid);
-        return;
-    }
-
-    auto& fs = fs::CFat32FileSystem::instance();
-
-    if (strcmp(path, "/") == 0) {
-        fs.set_current_path("/");
-        fs.set_current_dir_name("/");
-        fs.set_current_directory_cluster(ROOT_CLUSTER);
-        pm.terminate_process(pid);
-        return;
-    }
-
-    if (strcmp(path, "..") == 0) {
-        if (fs.pop_directory()) {
-            pm.terminate_process(pid);
-            return;
-        }
-
-        fs.set_current_path("/");
-        fs.set_current_dir_name("/");
-        fs.set_current_directory_cluster(ROOT_CLUSTER);
-        pm.terminate_process(pid);
-        return;
-    }
-
-    uint8_t buffer[1024];
-    uint32_t current_dir_cluster = fs.get_current_directory_cluster();
-    fs.readFile(current_dir_cluster, buffer, sizeof(buffer));
-
-    for (size_t i = 0; i < sizeof(buffer); i += 32) {
-        uint8_t* entry = &buffer[i];
-        if (entry[0] == 0x00) break;
-        if (entry[0] == 0xE5) continue;
-
-        char name[13] = {0};
-        memcpy(name, entry, 11);
-        name[11] = '\0';
-
-        for (int j = 10; j >= 0; j--) {
-            if (name[j] == ' ')
-                name[j] = '\0';
-            else
-                break;
-        }
-
-        if (strcmp(name, path) == 0) {
-            if (!(entry[11] & 0x10)) {
-                pm.terminate_process(pid);
-                return;
-            }
-
-            uint32_t dir_cluster = (entry[26] | (entry[27] << 8));
-
-            char new_path[MAX_PATH] = {0};
-            if (strcmp(fs.get_current_path(), "/") == 0)
-                snprintf(new_path, sizeof(new_path), "/%s", path);
-            else
-                snprintf(new_path, sizeof(new_path), "%s/%s", fs.get_current_path(), path);
-
-            fs.push_directory(path, new_path, dir_cluster);
-
-            fs.set_current_path(new_path);
-            fs.set_current_dir_name(path);
-            fs.set_current_directory_cluster(dir_cluster);
-            break;
-        }
-    }
-
-    pm.terminate_process(pid);
-}
-
-void cmd_cat(const char* path) {
-    auto& pm = kernel::ProcessManager::instance();
-    pid_t pid = pm.create_process("cat", shell_pid);
-
-    if (!path || !*path) {
-        pm.terminate_process(pid);
-        return;
-    }
-
-    auto& fs = fs::CFat32FileSystem::instance();
-    uint8_t buffer[1024];
-    uint32_t current_dir_cluster = fs.get_current_directory_cluster();
-    fs.readFile(current_dir_cluster, buffer, sizeof(buffer));
-
-    for (size_t i = 0; i < sizeof(buffer); i += 32) {
-        uint8_t* entry = &buffer[i];
-        if (entry[0] == 0x00) break;
-        if (entry[0] == 0xE5) continue;
-
-        char name[13] = {0};
-        memcpy(name, entry, 11);
-        name[11] = '\0';
-
-        for (int j = 10; j >= 0; j--) {
-            if (name[j] == ' ')
-                name[j] = '\0';
-            else
-                break;
-        }
-
-        if (strcmp(name, path) == 0) {
-            if (entry[11] & 0x10) {
-                pm.terminate_process(pid);
-                return;
-            }
-
-            uint32_t cluster = (entry[26] | (entry[27] << 8));
-            uint32_t size = (entry[28] | (entry[29] << 8) | (entry[30] << 16) | (entry[31] << 24));
-
-            if (size == 0) {
-                pm.terminate_process(pid);
-                return;
-            }
-
-            uint8_t* content = new uint8_t[size];
-            fs.readFile(cluster, content, size);
-
-            for (size_t j = 0; j < size; j++) {
-                if (content[j] == '\n')
-                    terminal_putchar('\n');
-                else if (content[j] >= 32 && content[j] <= 126)
-                    terminal_putchar(content[j]);
-                else
-                    terminal_putchar('.');
-            }
-
-            delete[] content;
-            break;
-        }
-    }
-
-    printf("\n");
-    pm.terminate_process(pid);
-}
-
-void cmd_mv(const char* args) {
-    auto& pm = kernel::ProcessManager::instance();
-    pid_t pid = pm.create_process("mv", shell_pid);
-
-    char src[MAX_PATH];
-    char dst[MAX_PATH];
-    split_path(args, src, dst);
-
-    if (!*src || !*dst) {
-        pm.terminate_process(pid);
-        return;
-    }
-
-    auto& fs = fs::CFat32FileSystem::instance();
-    fs.renameFile(src, dst);
-
-    pm.terminate_process(pid);
-}
-
-void cmd_rm(const char* path) {
-    auto& pm = kernel::ProcessManager::instance();
-    pid_t pid = pm.create_process("rm", shell_pid);
-
-    if (!path || !*path) {
-        pm.terminate_process(pid);
-        return;
-    }
-
-    if (strchr(path, '*')) {
-        handle_wildcard_command(path, [](const char* name) {
-            auto& fs = fs::CFat32FileSystem::instance();
-            uint32_t cluster, size;
-            uint8_t attributes;
-            if (fs.findFile(name, cluster, size, attributes)) {
-                if (attributes & 0x10)
-                    fs.deleteDirectoryRecursive(name);
-                else
-                    fs.deleteFile(name);
-            }
-        });
-        pm.terminate_process(pid);
-        return;
-    }
-
-    auto& fs = fs::CFat32FileSystem::instance();
-    uint32_t cluster, size;
-    uint8_t attributes;
-    if (!fs.findFile(path, cluster, size, attributes)) {
-        pm.terminate_process(pid);
-        return;
-    }
-
-    if (attributes & 0x10)
-        fs.deleteDirectoryRecursive(path);
-    else
-        fs.deleteFile(path);
-
-    pm.terminate_process(pid);
-}
-
-void cmd_touch(const char* path) {
-    auto& pm = kernel::ProcessManager::instance();
-    pid_t pid = pm.create_process("touch", shell_pid);
-
-    if (!path || !*path) {
-        printf("touch: missing operand\n");
-        pm.terminate_process(pid);
-        return;
-    }
-
-    auto& fs = fs::CFat32FileSystem::instance();
-    fs.createFile(path, 0x20);
-
-    pm.terminate_process(pid);
-}
-
-void cmd_edit(const char* path) {
-    auto& pm = kernel::ProcessManager::instance();
-    pid_t pid = pm.create_process("edit", shell_pid);
-
-    editor::cmd_edit(path);
-
-    pm.terminate_process(pid);
-}
-
-void cmd_history() {
-    auto& pm = kernel::ProcessManager::instance();
-    pid_t pid = pm.create_process("history", shell_pid);
-
-    for (size_t i = 0; i < history_count; i++) {
-        print_number(i + 1, 10, 4, false);
-        printf("  ");
-        printf(command_history[i]);
-        printf("\n");
-    }
-
-    pm.terminate_process(pid);
-}
-
-void cmd_uptime() {
-    auto& pm = kernel::ProcessManager::instance();
-    pid_t pid = pm.create_process("uptime", shell_pid);
-
-    char uptime_str[100] = {0};
-    format_uptime(uptime_str, sizeof(uptime_str));
-
-    printf("System uptime: ");
-    printf(uptime_str);
-    printf("\n");
-
-    pm.terminate_process(pid);
-}
-
-void cmd_time() {
-    auto& pm = kernel::ProcessManager::instance();
-    pid_t pid = pm.create_process("time", shell_pid);
-
-    RTCTime time = get_rtc_time();
-    printf("Current UTC time: %02u:%02u:%02u\n", time.hours, time.minutes, time.seconds);
-
-    pm.terminate_process(pid);
-}
-
-void cmd_graphics() {
-    for (int i = 0; i < 1000000; i++) {
-        asm volatile("nop");
-    }
-
-    enter_graphics_mode();
-
-    // never reached
-    in_graphics_mode = false;
-}
-
-void cmd_ps() {
-    auto& pm = kernel::ProcessManager::instance();
-    pid_t pid = pm.create_process("ps", shell_pid);
-
-    printf("  PID  PPID  STATE    NAME\n");
-
-    kernel::Process* current = pm.get_first_process();
-    while (current) {
-        printf("%5d %5d  ", current->pid, current->ppid);
-
-        switch (current->state) {
-            case kernel::ProcessState::Running:
-                printf("Running  ");
-                break;
-            case kernel::ProcessState::Stopped:
-                printf("Stopped  ");
-                break;
-            case kernel::ProcessState::Zombie:
-                printf("Zombie   ");
-                break;
-            case kernel::ProcessState::Ready:
-                printf("Ready    ");
-                break;
-            case kernel::ProcessState::Waiting:
-                printf("Waiting  ");
-                break;
-        }
-
-        printf(current->name);
-        printf("\n");
-
-        current = current->next;
-    }
-
-    pm.terminate_process(pid);
-}
-
-void cmd_pkill(const char* args) {
-    auto& pm = kernel::ProcessManager::instance();
-    pid_t pid = pm.create_process("pkill", shell_pid);
-
-    if (!args) {
-        printf("pkill: missing process id\n");
-        pm.terminate_process(pid);
-        return;
-    }
-
-    pid_t target_pid = 0;
-    while (*args) {
-        if (*args < '0' || *args > '9') {
-            printf("pkill: invalid process id\n");
-            pm.terminate_process(pid);
-            return;
-        }
-        target_pid = target_pid * 10 + (*args - '0');
-        args++;
-    }
-
-    if (target_pid == shell_pid) {
-        printf("pkill: cannot kill shell process\n");
-        pm.terminate_process(pid);
-        return;
-    }
-
-    kernel::Process* target = pm.get_process(target_pid);
-    if (!target) {
-        printf("pkill: no such process\n");
-        pm.terminate_process(pid);
-        return;
-    }
-
-    pm.terminate_process(target_pid);
-    pm.terminate_process(pid);
-}
-
-void cmd_less(const char* path) {
-    auto& pm = kernel::ProcessManager::instance();
-    pid_t pid = pm.create_process("less", shell_pid);
-
-    if (!path) {
-        printf("Usage: less <path>\n");
-        pm.terminate_process(pid);
-        return;
-    }
-
-    auto& fs = fs::CFat32FileSystem::instance();
-    uint8_t buffer[1024];
-    fs.readFile(ROOT_CLUSTER, buffer, sizeof(buffer));
-
-    bool found = false;
-    for (size_t i = 0; i < sizeof(buffer); i += 32) {
-        uint8_t* entry = &buffer[i];
-        if (entry[0] == 0x00) break;
-        if (entry[0] == 0xE5) continue;
-
-        char name[13] = {0};
-        memcpy(name, entry, 11);
-        name[11] = '\0';
-
-        if (strcmp(name, path) == 0) {
-            found = true;
-            uint32_t cluster = (entry[26] | (entry[27] << 8));
-            uint32_t size = (entry[28] | (entry[29] << 8) | (entry[30] << 16) | (entry[31] << 24));
-
-            char* text = new char[size + 1];
-            if (!text) {
-                printf("less: memory allocation failed\n");
-                pm.terminate_process(pid);
-                return;
-            }
-
-            fs.readFile(cluster, reinterpret_cast<uint8_t*>(text), size);
-            text[size] = '\0';
-            pager::show_text(text);
-            delete[] text;
-            break;
-        }
-    }
-
-    if (!found) printf("less: cannot read '%s': No such file\n", path);
-
-    pm.terminate_process(pid);
 }
 
 void interrupt_command() {
@@ -959,31 +367,31 @@ void process_command() {
     }
 
     if (strcmp(cmd, "help") == 0)
-        cmd_help();
+        commands::cmd_help();
     else if (strcmp(cmd, "echo") == 0)
-        cmd_echo(args);
+        commands::cmd_echo(args);
     else if (strcmp(cmd, "clear") == 0)
         terminal_clear();
     else if (strcmp(cmd, "crash") == 0)
-        cmd_crash();
+        commands::cmd_crash();
     else if (strcmp(cmd, "shutdown") == 0 || strcmp(cmd, "poweroff") == 0)
-        cmd_shutdown();
+        commands::cmd_shutdown();
     else if (strcmp(cmd, "memory") == 0)
-        cmd_memory();
+        commands::cmd_memory();
     else if (strcmp(cmd, "ls") == 0)
-        cmd_ls(args);
+        commands::cmd_ls(args);
     else if (strcmp(cmd, "mkdir") == 0)
-        cmd_mkdir(args);
+        commands::cmd_mkdir(args);
     else if (strcmp(cmd, "cd") == 0)
-        cmd_cd(args);
+        commands::cmd_cd(args);
     else if (strcmp(cmd, "cat") == 0)
-        cmd_cat(args);
+        commands::cmd_cat(args);
     else if (strcmp(cmd, "mv") == 0)
-        cmd_mv(args);
+        commands::cmd_mv(args);
     else if (strcmp(cmd, "rm") == 0)
-        cmd_rm(args);
+        commands::cmd_rm(args);
     else if (strcmp(cmd, "touch") == 0)
-        cmd_touch(args);
+        commands::cmd_touch(args);
     else if (strcmp(cmd, "edit") == 0) {
         char filename[256];
         if (args)
@@ -994,28 +402,24 @@ void process_command() {
         memset(input_buffer, 0, sizeof(input_buffer));
         input_pos = 0;
 
-        cmd_edit(filename);
+        commands::cmd_edit(filename);
         return;
     } else if (strcmp(cmd, "history") == 0)
-        cmd_history();
+        commands::cmd_history();
     else if (strcmp(cmd, "uptime") == 0)
-        cmd_uptime();
-    else if (strcmp(cmd, "shutdown") == 0 || strcmp(cmd, "poweroff") == 0)
-        cmd_shutdown();
-    else if (strcmp(cmd, "graphics") == 0)
-        cmd_graphics();
+        commands::cmd_uptime();
     else if (strcmp(cmd, "ps") == 0)
-        cmd_ps();
+        commands::cmd_ps();
     else if (strcmp(cmd, "pkill") == 0)
-        cmd_pkill(args);
+        commands::cmd_pkill(args);
     else if (strcmp(cmd, "time") == 0)
-        cmd_time();
+        commands::cmd_time();
     else if (strcmp(cmd, "less") == 0)
-        cmd_less(args);
+        commands::cmd_less(args);
     else if (strcmp(cmd, "ipctest") == 0)
-        cmd_ipc_test();
+        commands::cmd_ipc_test();
     else if (strcmp(cmd, "cores") == 0)
-        cmd_cores();
+        commands::cmd_cores();
     else {
         set_red();
         printf("Unknown command: %s\n", cmd);
@@ -1038,7 +442,7 @@ void init_shell() {
     shell_pid = pm.create_process("shell", 0);
 
     pager::init_pager();
-
+    commands::init_commands();
     screen_state::init();
 
     initialize_filesystem();
@@ -1053,117 +457,10 @@ void init_shell() {
     editor::init_editor();
 }
 
-void cmd_ipc_test() {
-    auto& pm = kernel::ProcessManager::instance();
-    pid_t test_pid = pm.create_process("ipc_test", shell_pid);
-    auto& ipc = kernel::IPCManager::instance();
+namespace commands {
 
-    char queue_name[64];
-    snprintf(queue_name, sizeof(queue_name), "test_queue_%d_%lu", test_pid, get_ticks());
-
-    int32_t queue_id = ipc.create_message_queue(test_pid, queue_name);
-    if (queue_id < 0) {
-        printf("Failed to create message queue\n");
-        pm.terminate_process(test_pid);
-        return;
-    }
-
-    printf("Created message queue with ID: %d\n", queue_id);
-
-    const char* message = "Hello from IPC test!";
-    if (!ipc.send_message(queue_id, test_pid, message, strlen(message) + 1)) {
-        printf("Failed to send message\n");
-        ipc.destroy_message_queue(queue_id);
-        pm.terminate_process(test_pid);
-        return;
-    }
-
-    printf("Sent message: \"%s\"\n", message);
-
-    struct {
-        pid_t sender;
-        uint64_t timestamp;
-        size_t size;
-        uint8_t data[1024];
-    } received_msg;
-
-    if (!ipc.receive_message(queue_id, *reinterpret_cast<kernel::IPCMessage*>(&received_msg),
-                             false)) {
-        printf("Failed to receive message\n");
-        ipc.destroy_message_queue(queue_id);
-        pm.terminate_process(test_pid);
-        return;
-    }
-
-    printf("Received message from PID %d: \"%s\"\n", received_msg.sender, received_msg.data);
-
-    int32_t shm_id = ipc.create_shared_memory(test_pid, 4096);
-    if (shm_id < 0) {
-        printf("Failed to create shared memory\n");
-        ipc.destroy_message_queue(queue_id);
-        pm.terminate_process(test_pid);
-        return;
-    }
-
-    printf("Created shared memory with ID: %d\n", shm_id);
-
-    void* shm_addr = ipc.attach_shared_memory(shm_id, test_pid);
-    if (!shm_addr) {
-        printf("Failed to attach shared memory\n");
-        ipc.destroy_shared_memory(shm_id);
-        ipc.destroy_message_queue(queue_id);
-        pm.terminate_process(test_pid);
-        return;
-    }
-
-    printf("Attached shared memory at address: 0x%llx\n", reinterpret_cast<uint64_t>(shm_addr));
-
-    const char* shm_message = "Hello from shared memory!";
-    memcpy(shm_addr, shm_message, strlen(shm_message) + 1);
-
-    printf("Wrote to shared memory: \"%s\"\n", shm_message);
-    printf("Read from shared memory: \"%s\"\n", static_cast<char*>(shm_addr));
-
-    if (!ipc.detach_shared_memory(shm_id, test_pid))
-        printf("Failed to detach shared memory\n");
-    else
-        printf("Detached shared memory\n");
-
-    if (!ipc.destroy_shared_memory(shm_id))
-        printf("Failed to destroy shared memory\n");
-    else
-        printf("Destroyed shared memory\n");
-
-    if (!ipc.destroy_message_queue(queue_id))
-        printf("Failed to destroy message queue\n");
-    else
-        printf("Destroyed message queue\n");
-
-    printf("IPC test completed successfully!\n");
-    pm.terminate_process(test_pid);
+void init_commands() {
+    // no-op
 }
 
-void cmd_cores() {
-    auto& smp = kernel::SMPManager::instance();
-
-    smp.detect_active_cores();
-
-    uint32_t cpu_count = smp.get_cpu_count();
-    printf("ID | LAPIC ID | BSP | Active | Stack Address\n");
-    printf("---+---------+-----+--------+-------------\n");
-
-    uint32_t active_count = 0;
-    for (uint32_t i = 0; i < cpu_count; i++) {
-        auto* cpu_info = smp.get_cpu_info(i);
-        if (cpu_info && cpu_info->is_active) active_count++;
-    }
-
-    for (uint32_t i = 0; i < cpu_count; i++) {
-        auto* cpu_info = smp.get_cpu_info(i);
-        if (cpu_info) {
-            printf("%2u | %7u | %3s | %6s | 0x%016lx\n", cpu_info->id, cpu_info->lapic_id,
-                   cpu_info->is_bsp ? "Yes" : "No", cpu_info->is_active ? "Yes" : "No",
-                   cpu_info->kernel_stack);
-        }
-    }
-}
+}  // namespace commands
