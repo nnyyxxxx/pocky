@@ -184,7 +184,7 @@ void TextEditor::process_keypress(char c) {
         outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xC0) | CURSOR_NORMAL_START);
         outb(VGA_CTRL_PORT, 0x0B);
         outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xE0) | CURSOR_NORMAL_END);
-        display_status_line();
+        render();
         return;
     }
 
@@ -195,7 +195,7 @@ void TextEditor::process_keypress(char c) {
             outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xC0) | CURSOR_INSERT_START);
             outb(VGA_CTRL_PORT, 0x0B);
             outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xE0) | CURSOR_INSERT_END);
-            display_status_line();
+            render();
             return;
         }
 
@@ -205,7 +205,7 @@ void TextEditor::process_keypress(char c) {
             outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xC0) | CURSOR_INSERT_START);
             outb(VGA_CTRL_PORT, 0x0B);
             outb(VGA_DATA_PORT, (inb(VGA_DATA_PORT) & 0xE0) | CURSOR_INSERT_END);
-            display_status_line();
+            render();
             return;
         }
 
@@ -230,14 +230,14 @@ void TextEditor::process_keypress(char c) {
         if (c == 'h' && m_cursor_col > 0) {
             m_cursor_col--;
             m_cursor_pos--;
-            update_cursor();
+            render();
             return;
         }
 
         if (c == 'l' && m_cursor_col < get_line_length(m_cursor_row)) {
             m_cursor_col++;
             m_cursor_pos++;
-            update_cursor();
+            render();
             return;
         }
 
@@ -247,11 +247,10 @@ void TextEditor::process_keypress(char c) {
                 m_cursor_row--;
                 m_cursor_col = m_cursor_col > prev_line_length ? prev_line_length : m_cursor_col;
                 update_cursor_pos();
-                if (m_cursor_row < m_screen_row) {
-                    m_screen_row = m_cursor_row;
-                    render();
-                } else
-                    update_cursor();
+
+                if (m_cursor_row < m_screen_row) m_screen_row = m_cursor_row;
+
+                render();
             }
             return;
         }
@@ -262,11 +261,12 @@ void TextEditor::process_keypress(char c) {
                 m_cursor_row++;
                 m_cursor_col = m_cursor_col > next_line_length ? next_line_length : m_cursor_col;
                 update_cursor_pos();
+
                 if (m_cursor_row >= m_screen_row + TERMINAL_HEIGHT - 1) {
                     m_screen_row = m_cursor_row - TERMINAL_HEIGHT + 2;
-                    render();
-                } else
-                    update_cursor();
+                }
+
+                render();
             }
             return;
         }
@@ -294,16 +294,29 @@ void TextEditor::process_keypress(char c) {
         }
 
         if (c == '\b' && m_cursor_pos > 0) {
+            bool deleting_newline = (m_cursor_pos > 0 && m_buffer[m_cursor_pos - 1] == '\n');
+
+            size_t prev_line_length = 0;
+            if (deleting_newline) {
+                size_t prev_line_start = m_cursor_pos - 2;
+                while (prev_line_start > 0 && m_buffer[prev_line_start] != '\n') {
+                    prev_line_start--;
+                }
+                if (m_buffer[prev_line_start] == '\n') prev_line_start++;
+                prev_line_length = (m_cursor_pos - 1) - prev_line_start;
+            }
+
             memmove(&m_buffer[m_cursor_pos - 1], &m_buffer[m_cursor_pos],
                     m_buffer_size - m_cursor_pos);
             m_buffer_size--;
             m_cursor_pos--;
-            if (m_cursor_col > 0)
-                m_cursor_col--;
-            else {
+
+            if (deleting_newline) {
                 m_cursor_row--;
-                m_cursor_col = get_line_length(m_cursor_row);
-            }
+                m_cursor_col = prev_line_length;
+            } else if (m_cursor_col > 0)
+                m_cursor_col--;
+
             m_modified = true;
             render();
             return;
