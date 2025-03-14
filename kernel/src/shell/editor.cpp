@@ -286,23 +286,9 @@ void TextEditor::process_keypress(char c) {
     }
 
     if (m_mode == EditorMode::INSERT) {
-        if (is_ctrl_key(c, 'S')) {
-            if (save())
-                display_status_line();
-            else {
-                char status[TERMINAL_WIDTH + 1] = "ERROR: Failed to save file";
-                for (size_t i = 0; i < TERMINAL_WIDTH; i++) {
-                    terminal_putchar_at(i < strlen(status) ? status[i] : ' ', 0x4F, i, STATUS_LINE);
-                }
-                update_cursor();
-            }
-            return;
-        }
+        if (is_ctrl_key(c, 'S')) return;
 
-        if (is_ctrl_key(c, 'Q')) {
-            close();
-            return;
-        }
+        if (is_ctrl_key(c, 'Q')) return;
 
         if (c == '\b' && m_cursor_pos > 0) {
             bool deleting_newline = (m_cursor_pos > 0 && m_buffer[m_cursor_pos - 1] == '\n');
