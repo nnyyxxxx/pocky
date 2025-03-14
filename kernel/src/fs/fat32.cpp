@@ -993,7 +993,6 @@ bool CFat32FileSystem::renameFile(const char* oldName, const char* newName) {
 
     uint32_t destDirectoryCluster = m_currentDirectoryCluster;
     const char* destFileName = newName;
-    [[maybe_unused]] bool destIsDirectory = false;
 
     if (newName[0] == '/') {
         destDirectoryCluster = ROOT_CLUSTER;
@@ -1004,7 +1003,6 @@ bool CFat32FileSystem::renameFile(const char* oldName, const char* newName) {
     uint8_t destAttributes;
     if (findFile(newName, destCluster, destSize, destAttributes)) {
         if (destAttributes & 0x10) {
-            destIsDirectory = true;
             destDirectoryCluster = destCluster;
             destFileName = sourceFileName;
         } else

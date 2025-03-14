@@ -65,41 +65,6 @@ size_t history_count = 0;
 
 namespace {
 
-[[maybe_unused]] void split_path(const char* input, char* first, char* second) {
-    const char* space = strchr(input, ' ');
-    if (!space) {
-        strcpy(first, input);
-        second[0] = '\0';
-        return;
-    }
-
-    size_t first_len = space - input;
-    strncpy(first, input, first_len);
-    first[first_len] = '\0';
-
-    while (*space == ' ')
-        space++;
-    strcpy(second, space);
-}
-
-[[maybe_unused]] void list_callback(const char* name, uint8_t attributes, uint32_t size) {
-    if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) return;
-
-    if (attributes & 0x10)
-        printf("d ");
-    else {
-        printf("f ");
-        if (size < 1024)
-            printf("(%u B) ", size);
-        else if (size < 1024 * 1024)
-            printf("(%u KB) ", size / 1024);
-        else
-            printf("(%u MB) ", size / (1024 * 1024));
-    }
-
-    printf("%s\n", name);
-}
-
 template <typename F>
 void handle_wildcard_command(const char* pattern, F cmd_fn) {
     auto& fs = fs::CFat32FileSystem::instance();

@@ -15,8 +15,7 @@ void __cxa_guard_abort(uint64_t* guard_object) {
     *guard_object = 0;
 }
 
-int __cxa_atexit([[maybe_unused]] void (*dtor)(void*), [[maybe_unused]] void* obj,
-                 [[maybe_unused]] void* dso_handle) {
+int __cxa_atexit() {
     return 0;
 }
 

@@ -221,9 +221,4 @@ void* DynamicLinker::resolve_symbol(const char* symbol_name) {
     return nullptr;
 }
 
-void* DynamicLinker::runtime_resolver([[maybe_unused]] uint64_t got_base, uint64_t) {
-    printf("Dynamic symbol resolution called\n");
-    return reinterpret_cast<void*>(0);
-}
-
 }  // namespace kernel

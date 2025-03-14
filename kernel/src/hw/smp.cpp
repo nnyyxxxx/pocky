@@ -75,16 +75,8 @@ void write_msr(uint32_t msr, uint64_t value) {
     asm volatile("wrmsr" : : "a"(low), "d"(high), "c"(msr));
 }
 
-[[maybe_unused]] uint32_t lapic_read(void* base, uint32_t reg) {
-    return *((volatile uint32_t*)((uint8_t*)base + reg));
-}
-
 void lapic_write(void* base, uint32_t reg, uint32_t value) {
     *((volatile uint32_t*)((uint8_t*)base + reg)) = value;
-}
-
-[[maybe_unused]] void lapic_send_eoi(void* base) {
-    lapic_write(base, LAPIC_EOI, 0);
 }
 
 void delay(uint32_t count) {
