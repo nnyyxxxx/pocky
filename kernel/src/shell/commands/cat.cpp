@@ -44,23 +44,30 @@ void cmd_cat(const char* path) {
     uint8_t* buffer = new uint8_t[CHUNK_SIZE];
     size_t remaining = size;
     size_t offset = 0;
+    bool ends_with_newline = false;
 
     while (remaining > 0) {
         size_t chunk = remaining < CHUNK_SIZE ? remaining : CHUNK_SIZE;
         fs.readFile(cluster, buffer, chunk);
 
         for (size_t i = 0; i < chunk; i++) {
-            if (buffer[i] == '\n')
+            if (buffer[i] == '\n') {
                 terminal_putchar('\n');
-            else if (buffer[i] >= 32 && buffer[i] <= 126)
-                terminal_putchar(buffer[i]);
-            else
-                terminal_putchar('.');
+                ends_with_newline = true;
+            } else {
+                if (buffer[i] >= 32 && buffer[i] <= 126)
+                    terminal_putchar(buffer[i]);
+                else
+                    terminal_putchar('.');
+                ends_with_newline = false;
+            }
         }
 
         remaining -= chunk;
         offset += chunk;
     }
+
+    if (!ends_with_newline) terminal_putchar('\n');
 
     delete[] buffer;
     pm.terminate_process(pid);
