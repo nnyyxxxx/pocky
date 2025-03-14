@@ -134,6 +134,10 @@ bool TextEditor::open(const char* filename) {
 bool TextEditor::save() {
     if (!m_active) return false;
 
+    while (m_buffer_size > 0 && m_buffer[m_buffer_size - 1] == '\n') {
+        m_buffer_size--;
+    }
+
     auto& fs = fs::CFat32FileSystem::instance();
     uint32_t cluster, size;
     uint8_t attributes;
@@ -145,7 +149,13 @@ bool TextEditor::save() {
     if (!fs.updateFileSize(m_filename, m_buffer_size)) return false;
 
     m_modified = false;
-    display_status_line();
+
+    if (m_cursor_pos > m_buffer_size) {
+        m_cursor_pos = m_buffer_size;
+        update_cursor_pos();
+    }
+
+    render();
     return true;
 }
 
