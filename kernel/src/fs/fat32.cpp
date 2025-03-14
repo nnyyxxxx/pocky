@@ -979,7 +979,7 @@ bool CFat32FileSystem::renameFile(const char* oldName, const char* newName) {
 
     uint32_t destDirectoryCluster = m_currentDirectoryCluster;
     const char* destFileName = newName;
-    bool destIsDirectory = false;
+    [[maybe_unused]] bool destIsDirectory = false;
 
     if (newName[0] == '/') {
         destDirectoryCluster = ROOT_CLUSTER;
