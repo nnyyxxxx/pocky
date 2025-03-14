@@ -2,8 +2,6 @@
 
 namespace commands {
 
-void init_commands();
-
 void cmd_cd(const char* path);
 void cmd_ls(const char* path);
 void cmd_mkdir(const char* path);

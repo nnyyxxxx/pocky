@@ -661,10 +661,6 @@ void TextEditor::update_cursor() {
     update_cursor_position(screen_x, screen_y);
 }
 
-void init_editor() {
-    // no-op
-}
-
 void cmd_edit(const char* filename) {
     if (!filename || !*filename) {
         printf("Usage: edit <filename>\n");

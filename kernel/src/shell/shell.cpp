@@ -455,7 +455,6 @@ void init_shell() {
     shell_pid = pm.create_process("shell", 0);
 
     pager::init_pager();
-    commands::init_commands();
     screen_state::init();
 
     initialize_filesystem();
@@ -467,13 +466,4 @@ void init_shell() {
 
     printf("\n");
     print_prompt();
-    editor::init_editor();
 }
-
-namespace commands {
-
-void init_commands() {
-    // no-op
-}
-
-}  // namespace commands

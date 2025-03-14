@@ -63,7 +63,6 @@ private:
     EditorMode m_mode = EditorMode::NORMAL;
 };
 
-void init_editor();
 void cmd_edit(const char* filename);
 
 }  // namespace editor
