@@ -230,10 +230,6 @@ void print_prompt() {
     set_white();
     printf("[");
     set_gray();
-    printf("root");
-    set_white();
-    printf("@");
-    set_gray();
     printf("kernel");
     set_white();
     printf(" ");
