@@ -235,8 +235,13 @@ void handle_tab_completion() {
         strcpy(command, input_buffer);
 
     auto& fs = fs::CFat32FileSystem::instance();
+    uint32_t current_cluster;
+    uint32_t size;
+    uint8_t attributes;
+    if (!fs.findFile(".", current_cluster, size, attributes)) current_cluster = ROOT_CLUSTER;
+
     uint8_t buffer[1024];
-    fs.readFile(ROOT_CLUSTER, buffer, sizeof(buffer));
+    fs.readFile(current_cluster, buffer, sizeof(buffer));
 
     const char* match = nullptr;
     size_t matches = 0;
