@@ -121,30 +121,6 @@ void handle_wildcard_command(const char* pattern, F cmd_fn) {
 
 }  // namespace
 
-void initialize_filesystem() {
-    auto& fs = fs::CFat32FileSystem::instance();
-    if (!fs.mount()) printf("Failed to mount filesystem\n");
-
-    uint32_t saved_cluster = fs.get_current_directory_cluster();
-    const char* saved_path = fs.get_current_path();
-    const char* saved_dir_name = fs.get_current_dir_name();
-
-    fs.set_current_path("/");
-    fs.set_current_dir_name("/");
-    fs.set_current_directory_cluster(ROOT_CLUSTER);
-
-    const char* default_dirs[] = {"etc", "tmp"};
-    for (const char* dir : default_dirs) {
-        uint32_t cluster, size;
-        uint8_t attributes;
-        if (!fs.findFile(dir, cluster, size, attributes)) fs.createDirectory(dir);
-    }
-
-    fs.set_current_path(saved_path);
-    fs.set_current_dir_name(saved_dir_name);
-    fs.set_current_directory_cluster(saved_cluster);
-}
-
 void interrupt_command() {
     auto& pm = kernel::ProcessManager::instance();
     kernel::Process* current = pm.get_first_process();
@@ -456,8 +432,6 @@ void init_shell() {
 
     pager::init_pager();
     screen_state::init();
-
-    initialize_filesystem();
 
     auto& fs = fs::CFat32FileSystem::instance();
     fs.set_current_path("/");

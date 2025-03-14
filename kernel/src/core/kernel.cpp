@@ -141,17 +141,10 @@ extern "C" void kernel_main() {
     fs.readFile(2, buffer, sizeof(buffer));
     fs.writeFile(2, buffer, sizeof(buffer));
 
-    fs.unmount();
-
-    const char* msg14 = "[14] Filesystem Unmounted";
-    for (int i = 0; msg14[i] != '\0'; i++) {
-        vga[i + 1040] = 0x0F00 | msg14[i];
-    }
-
     auto& scheduler = kernel::Scheduler::instance();
     scheduler.initialize(kernel::SchedulerPolicy::RoundRobin);
 
-    const char* msg15 = "[15] Scheduler Init Done";
+    const char* msg15 = "[14] Scheduler Init Done";
     for (int i = 0; msg15[i] != '\0'; i++) {
         vga[i + 1120] = 0x0F00 | msg15[i];
     }
@@ -159,7 +152,7 @@ extern "C" void kernel_main() {
     auto& smp = kernel::SMPManager::instance();
     smp.initialize();
 
-    const char* msg16 = "[16] SMP Init Done";
+    const char* msg16 = "[15] SMP Init Done";
     for (int i = 0; msg16[i] != '\0'; i++) {
         vga[i + 1200] = 0x0F00 | msg16[i];
     }
@@ -167,7 +160,7 @@ extern "C" void kernel_main() {
     if (smp.is_smp_enabled()) {
         smp.startup_application_processors();
 
-        const char* msg17 = "[17] AP Startup Done";
+        const char* msg17 = "[16] AP Startup Done";
         for (int i = 0; msg17[i] != '\0'; i++) {
             vga[i + 1280] = 0x0F00 | msg17[i];
         }
