@@ -137,10 +137,6 @@ extern "C" void kernel_main() {
         vga[i + 960] = 0x0F00 | msg13[i];
     }
 
-    uint8_t buffer[1024];
-    fs.readFile(2, buffer, sizeof(buffer));
-    fs.writeFile(2, buffer, sizeof(buffer));
-
     auto& scheduler = kernel::Scheduler::instance();
     scheduler.initialize(kernel::SchedulerPolicy::RoundRobin);
 

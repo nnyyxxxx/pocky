@@ -104,6 +104,11 @@ public:
                              uint32_t& size, uint8_t& attributes);
     bool updateFileSize(const char* filename, uint32_t newSize);
 
+    bool createFileWithContent(const char* path, const uint8_t* data, size_t dataSize,
+                               uint8_t attributes = 0);
+    bool writeFileByPath(const char* path, const uint8_t* data, size_t dataSize);
+    bool readFileByPath(const char* path, uint8_t* buffer, size_t bufferSize);
+
 private:
     CFat32FileSystem(const CFat32FileSystem&) = delete;
     CFat32FileSystem& operator=(const CFat32FileSystem&) = delete;
@@ -129,6 +134,7 @@ private:
     bool validateFileName(const char* name);
     bool isDirectoryEmpty(uint32_t cluster);
     void clearDirectory(uint32_t cluster);
+    const char* get_dir_name(const char* path);
 
     SFat32BPB m_bpb;
     SFat32FSInfo m_fsInfo;

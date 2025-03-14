@@ -438,6 +438,14 @@ void init_shell() {
     fs.set_current_dir_name("/");
     fs.set_current_directory_cluster(ROOT_CLUSTER);
 
+    uint32_t cluster, size;
+    uint8_t attributes;
+    if (!fs.findFile("tmp", cluster, size, attributes)) fs.createDirectory("tmp");
+
+    const char* welcome_msg = "Welcome to the kernel!\n";
+    fs.createFileWithContent("tmp/welcome", reinterpret_cast<const uint8_t*>(welcome_msg),
+                             strlen(welcome_msg), 0);
+
     printf("\n");
     print_prompt();
 }

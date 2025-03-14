@@ -1405,4 +1405,193 @@ bool CFat32FileSystem::deleteDirectoryRecursive(const char* name) {
     return false;
 }
 
+bool CFat32FileSystem::createFileWithContent(const char* path, const uint8_t* data, size_t dataSize,
+                                             uint8_t attributes) {
+    uint32_t saved_cluster = m_currentDirectoryCluster;
+    char saved_path[MAX_PATH];
+    char saved_dir_name[MAX_PATH];
+    strcpy(saved_path, m_currentPath);
+    strcpy(saved_dir_name, m_currentDirName);
+
+    char dir_path[MAX_PATH] = {0};
+    char filename[MAX_PATH] = {0};
+
+    const char* last_slash = strrchr(path, '/');
+    if (last_slash) {
+        size_t dir_len = last_slash - path;
+        strncpy(dir_path, path, dir_len);
+        dir_path[dir_len] = '\0';
+
+        strcpy(filename, last_slash + 1);
+
+        if (dir_path[0] == '\0') strcpy(dir_path, "/");
+    } else {
+        strcpy(dir_path, m_currentPath);
+        strcpy(filename, path);
+    }
+
+    bool result = false;
+    uint32_t dir_cluster = ROOT_CLUSTER;
+    uint32_t size;
+    uint8_t attrs;
+
+    if (strcmp(dir_path, "/") != 0) {
+        if (!findFile(dir_path, dir_cluster, size, attrs) || !(attrs & 0x10)) goto cleanup;
+
+        set_current_directory_cluster(dir_cluster);
+        set_current_path(dir_path);
+        set_current_dir_name(get_dir_name(dir_path));
+    }
+
+    if (!createFile(filename, attributes)) goto cleanup;
+
+    uint32_t file_cluster;
+    if (!findFile(filename, file_cluster, size, attrs)) goto cleanup;
+
+    if (!writeFile(file_cluster, data, dataSize)) goto cleanup;
+
+    if (!updateFileSize(filename, dataSize)) goto cleanup;
+
+    result = true;
+
+cleanup:
+    set_current_directory_cluster(saved_cluster);
+    set_current_path(saved_path);
+    set_current_dir_name(saved_dir_name);
+
+    return result;
+}
+
+bool CFat32FileSystem::writeFileByPath(const char* path, const uint8_t* data, size_t dataSize) {
+    uint32_t saved_cluster = m_currentDirectoryCluster;
+    char saved_path[MAX_PATH];
+    char saved_dir_name[MAX_PATH];
+    strcpy(saved_path, m_currentPath);
+    strcpy(saved_dir_name, m_currentDirName);
+
+    char dir_path[MAX_PATH] = {0};
+    char filename[MAX_PATH] = {0};
+
+    const char* last_slash = strrchr(path, '/');
+    if (last_slash) {
+        size_t dir_len = last_slash - path;
+        strncpy(dir_path, path, dir_len);
+        dir_path[dir_len] = '\0';
+
+        strcpy(filename, last_slash + 1);
+
+        if (dir_path[0] == '\0') strcpy(dir_path, "/");
+    } else {
+        strcpy(dir_path, m_currentPath);
+        strcpy(filename, path);
+    }
+
+    bool result = false;
+    uint32_t dir_cluster = ROOT_CLUSTER;
+    uint32_t size;
+    uint8_t attrs;
+
+    if (strcmp(dir_path, "/") != 0) {
+        if (!findFile(dir_path, dir_cluster, size, attrs) || !(attrs & 0x10)) goto cleanup;
+
+        set_current_directory_cluster(dir_cluster);
+        set_current_path(dir_path);
+        set_current_dir_name(get_dir_name(dir_path));
+    }
+
+    uint32_t file_cluster;
+    if (!findFile(filename, file_cluster, size, attrs)) goto cleanup;
+
+    if (!writeFile(file_cluster, data, dataSize)) goto cleanup;
+
+    if (!updateFileSize(filename, dataSize)) goto cleanup;
+
+    result = true;
+
+cleanup:
+    set_current_directory_cluster(saved_cluster);
+    set_current_path(saved_path);
+    set_current_dir_name(saved_dir_name);
+
+    return result;
+}
+
+bool CFat32FileSystem::readFileByPath(const char* path, uint8_t* buffer, size_t bufferSize) {
+    uint32_t saved_cluster = m_currentDirectoryCluster;
+    char saved_path[MAX_PATH];
+    char saved_dir_name[MAX_PATH];
+    strcpy(saved_path, m_currentPath);
+    strcpy(saved_dir_name, m_currentDirName);
+
+    char dir_path[MAX_PATH] = {0};
+    char filename[MAX_PATH] = {0};
+
+    const char* last_slash = strrchr(path, '/');
+    if (last_slash) {
+        size_t dir_len = last_slash - path;
+        strncpy(dir_path, path, dir_len);
+        dir_path[dir_len] = '\0';
+
+        strcpy(filename, last_slash + 1);
+
+        if (dir_path[0] == '\0') strcpy(dir_path, "/");
+    } else {
+        strcpy(dir_path, m_currentPath);
+        strcpy(filename, path);
+    }
+
+    bool result = false;
+    uint32_t dir_cluster = ROOT_CLUSTER;
+    uint32_t size;
+    uint8_t attrs;
+
+    if (strcmp(dir_path, "/") != 0) {
+        if (!findFile(dir_path, dir_cluster, size, attrs) || !(attrs & 0x10)) goto cleanup;
+
+        set_current_directory_cluster(dir_cluster);
+        set_current_path(dir_path);
+        set_current_dir_name(get_dir_name(dir_path));
+    }
+
+    uint32_t file_cluster;
+    if (!findFile(filename, file_cluster, size, attrs)) goto cleanup;
+
+    readFile(file_cluster, buffer, bufferSize);
+    result = true;
+
+cleanup:
+    set_current_directory_cluster(saved_cluster);
+    set_current_path(saved_path);
+    set_current_dir_name(saved_dir_name);
+
+    return result;
+}
+
+const char* CFat32FileSystem::get_dir_name(const char* path) {
+    static char buffer[MAX_PATH];
+
+    if (!path || !*path) {
+        strcpy(buffer, "/");
+        return buffer;
+    }
+
+    if (strcmp(path, "/") == 0) {
+        strcpy(buffer, "/");
+        return buffer;
+    }
+
+    strncpy(buffer, path, MAX_PATH - 1);
+    buffer[MAX_PATH - 1] = '\0';
+
+    size_t len = strlen(buffer);
+    if (len > 1 && buffer[len - 1] == '/') buffer[len - 1] = '\0';
+
+    char* last_slash = strrchr(buffer, '/');
+    if (!last_slash) return buffer;
+
+    if (last_slash == buffer) return last_slash + 1;
+
+    return last_slash + 1;
+}
+
 }  // namespace fs
