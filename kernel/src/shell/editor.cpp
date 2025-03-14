@@ -293,26 +293,32 @@ void TextEditor::process_keypress(char c) {
         if (c == '\b' && m_cursor_pos > 0) {
             bool deleting_newline = (m_cursor_pos > 0 && m_buffer[m_cursor_pos - 1] == '\n');
 
-            size_t prev_line_length = 0;
             if (deleting_newline) {
-                size_t prev_line_start = m_cursor_pos - 2;
-                while (prev_line_start > 0 && m_buffer[prev_line_start] != '\n') {
-                    prev_line_start--;
-                }
-                if (m_buffer[prev_line_start] == '\n') prev_line_start++;
-                prev_line_length = (m_cursor_pos - 1) - prev_line_start;
-            }
+                memmove(&m_buffer[m_cursor_pos - 1], &m_buffer[m_cursor_pos],
+                        m_buffer_size - m_cursor_pos);
+                m_buffer_size--;
+                m_cursor_pos--;
 
-            memmove(&m_buffer[m_cursor_pos - 1], &m_buffer[m_cursor_pos],
-                    m_buffer_size - m_cursor_pos);
-            m_buffer_size--;
-            m_cursor_pos--;
-
-            if (deleting_newline) {
                 m_cursor_row--;
-                m_cursor_col = prev_line_length;
-            } else if (m_cursor_col > 0)
-                m_cursor_col--;
+
+                size_t line_start = 0;
+                size_t current_row = 0;
+                for (size_t i = 0; i < m_cursor_pos; i++) {
+                    if (m_buffer[i] == '\n') {
+                        line_start = i + 1;
+                        current_row++;
+                    }
+                }
+
+                m_cursor_col = m_cursor_pos - line_start;
+            } else {
+                memmove(&m_buffer[m_cursor_pos - 1], &m_buffer[m_cursor_pos],
+                        m_buffer_size - m_cursor_pos);
+                m_buffer_size--;
+                m_cursor_pos--;
+
+                if (m_cursor_col > 0) m_cursor_col--;
+            }
 
             m_modified = true;
             render();
