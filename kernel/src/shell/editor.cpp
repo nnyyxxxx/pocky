@@ -628,7 +628,10 @@ void TextEditor::display_status_line() {
     }
 
     strcat(status, row_str);
-    strcat(status, " | Ctrl-S: Save | Ctrl-Q: Quit");
+    if (m_mode == EditorMode::NORMAL)
+        strcat(status, " | Ctrl-S: Save | Ctrl-Q: Quit");
+    else
+        strcat(status, " | Esc: Normal mode");
 
     for (size_t i = 0; i < TERMINAL_WIDTH; i++) {
         terminal_putchar_at(i < strlen(status) ? status[i] : ' ', STATUS_COLOR, i, STATUS_LINE);
