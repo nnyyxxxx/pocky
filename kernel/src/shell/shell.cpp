@@ -514,7 +514,7 @@ void cmd_rm(const char* path) {
             uint8_t attributes;
             if (fs.findFile(name, cluster, size, attributes)) {
                 if (attributes & 0x10)
-                    fs.deleteDirectory(name);
+                    fs.deleteDirectoryRecursive(name);
                 else
                     fs.deleteFile(name);
             }
@@ -532,7 +532,7 @@ void cmd_rm(const char* path) {
     }
 
     if (attributes & 0x10)
-        fs.deleteDirectory(path);
+        fs.deleteDirectoryRecursive(path);
     else
         fs.deleteFile(path);
 

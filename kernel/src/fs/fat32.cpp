@@ -1,5 +1,6 @@
 #include "fat32.hpp"
 
+#include <cstdio>
 #include <cstring>
 
 #include "drivers/ata.hpp"
@@ -647,16 +648,29 @@ bool CFat32FileSystem::validateFileName(const char* name) {
 
 bool CFat32FileSystem::isDirectoryEmpty(uint32_t cluster) {
     uint8_t sectorData[m_bpb.m_bytesPerSector];
-    uint32_t sector = (cluster - 2) * m_bpb.m_sectorsPerCluster + m_firstDataSector;
+    uint32_t currentCluster = cluster;
 
-    if (!readSector(sector, sectorData)) return false;
+    while (true) {
+        uint32_t sector = (currentCluster - 2) * m_bpb.m_sectorsPerCluster + m_firstDataSector;
 
-    for (size_t i = 0; i < m_bpb.m_bytesPerSector; i += 32) {
-        uint8_t* entry = &sectorData[i];
-        if (entry[0] == 0x00) return true;
-        if (entry[0] != 0xE5 && strncmp(reinterpret_cast<char*>(entry), ".", 11) != 0 &&
-            strncmp(reinterpret_cast<char*>(entry), "..", 11) != 0)
-            return false;
+        for (uint32_t i = 0; i < m_bpb.m_sectorsPerCluster; i++) {
+            if (!readSector(sector + i, sectorData)) return false;
+
+            for (size_t j = 0; j < m_bpb.m_bytesPerSector; j += 32) {
+                uint8_t* entry = &sectorData[j];
+                if (entry[0] == 0x00) return true;
+                if (entry[0] == 0xE5) continue;
+
+                if (strncmp(reinterpret_cast<char*>(entry), ".", 11) != 0 &&
+                    strncmp(reinterpret_cast<char*>(entry), "..", 11) != 0)
+                    return false;
+            }
+        }
+
+        uint32_t nextCluster = readFatEntry(currentCluster);
+        if (nextCluster >= 0x0FFFFFF8) break;
+        if (nextCluster == 0x0FFFFFF7) return false;
+        currentCluster = nextCluster;
     }
 
     return true;
@@ -782,22 +796,64 @@ bool CFat32FileSystem::deleteFile(const char* name) {
 
     if (attributes & 0x10) return false;
 
+    uint32_t directoryCluster = m_currentDirectoryCluster;
+    const char* fileName = name;
+
+    if (name[0] == '/') {
+        directoryCluster = ROOT_CLUSTER;
+        fileName++;
+    }
+
+    const char* lastSlash = strrchr(fileName, '/');
+    if (lastSlash) {
+        char dirPath[MAX_PATH] = {0};
+        strncpy(dirPath, fileName, lastSlash - fileName);
+
+        uint32_t tempCluster, tempSize;
+        uint8_t tempAttributes;
+        if (!findFile(dirPath, tempCluster, tempSize, tempAttributes) || !(tempAttributes & 0x10))
+            return false;
+
+        directoryCluster = tempCluster;
+        fileName = lastSlash + 1;
+    }
+
     uint8_t sectorData[m_bpb.m_bytesPerSector];
-    uint32_t sector = (ROOT_CLUSTER - 2) * m_bpb.m_sectorsPerCluster + m_firstDataSector;
-    if (!readSector(sector, sectorData)) return false;
+    uint32_t currentCluster = directoryCluster;
 
-    for (size_t i = 0; i < m_bpb.m_bytesPerSector; i += 32) {
-        uint8_t* entry = &sectorData[i];
-        if (entry[0] == 0x00) break;
-        if (entry[0] == 0xE5) continue;
+    while (true) {
+        uint32_t sector = (currentCluster - 2) * m_bpb.m_sectorsPerCluster + m_firstDataSector;
 
-        char entryName[13] = {0};
-        memcpy(entryName, entry, 11);
-        if (strcmp(entryName, name) == 0) {
-            entry[0] = 0xE5;
-            if (!diskWrite(sector, sectorData, m_bpb.m_bytesPerSector)) return false;
-            break;
+        for (uint32_t i = 0; i < m_bpb.m_sectorsPerCluster; i++) {
+            if (!readSector(sector + i, sectorData)) return false;
+
+            for (size_t j = 0; j < m_bpb.m_bytesPerSector; j += 32) {
+                uint8_t* entry = &sectorData[j];
+                if (entry[0] == 0x00) break;
+                if (entry[0] == 0xE5) continue;
+                if (entry[11] == 0x0F) continue;
+
+                char entryName[13] = {0};
+                memcpy(entryName, entry, 11);
+                for (int k = 10; k >= 0; k--) {
+                    if (entryName[k] == ' ')
+                        entryName[k] = '\0';
+                    else
+                        break;
+                }
+
+                if (strcmp(entryName, fileName) == 0) {
+                    entry[0] = 0xE5;
+                    if (!diskWrite(sector + i, sectorData, m_bpb.m_bytesPerSector)) return false;
+                    break;
+                }
+            }
         }
+
+        uint32_t nextCluster = readFatEntry(currentCluster);
+        if (nextCluster >= 0x0FFFFFF8) break;
+        if (nextCluster == 0x0FFFFFF7) return false;
+        currentCluster = nextCluster;
     }
 
     while (cluster < 0x0FFFFFF8) {
@@ -819,22 +875,65 @@ bool CFat32FileSystem::deleteDirectory(const char* name) {
     if (!(attributes & 0x10)) return false;
     if (!isDirectoryEmpty(cluster)) return false;
 
+    uint32_t directoryCluster = m_currentDirectoryCluster;
+    const char* dirName = name;
+
+    if (name[0] == '/') {
+        directoryCluster = ROOT_CLUSTER;
+        dirName++;
+    }
+
+    const char* lastSlash = strrchr(dirName, '/');
+    if (lastSlash) {
+        char parentPath[MAX_PATH] = {0};
+        strncpy(parentPath, dirName, lastSlash - dirName);
+
+        uint32_t tempCluster, tempSize;
+        uint8_t tempAttributes;
+        if (!findFile(parentPath, tempCluster, tempSize, tempAttributes) ||
+            !(tempAttributes & 0x10))
+            return false;
+
+        directoryCluster = tempCluster;
+        dirName = lastSlash + 1;
+    }
+
     uint8_t sectorData[m_bpb.m_bytesPerSector];
-    uint32_t sector = (ROOT_CLUSTER - 2) * m_bpb.m_sectorsPerCluster + m_firstDataSector;
-    if (!readSector(sector, sectorData)) return false;
+    uint32_t currentCluster = directoryCluster;
 
-    for (size_t i = 0; i < m_bpb.m_bytesPerSector; i += 32) {
-        uint8_t* entry = &sectorData[i];
-        if (entry[0] == 0x00) break;
-        if (entry[0] == 0xE5) continue;
+    while (true) {
+        uint32_t sector = (currentCluster - 2) * m_bpb.m_sectorsPerCluster + m_firstDataSector;
 
-        char entryName[13] = {0};
-        memcpy(entryName, entry, 11);
-        if (strcmp(entryName, name) == 0) {
-            entry[0] = 0xE5;
-            if (!diskWrite(sector, sectorData, m_bpb.m_bytesPerSector)) return false;
-            break;
+        for (uint32_t i = 0; i < m_bpb.m_sectorsPerCluster; i++) {
+            if (!readSector(sector + i, sectorData)) return false;
+
+            for (size_t j = 0; j < m_bpb.m_bytesPerSector; j += 32) {
+                uint8_t* entry = &sectorData[j];
+                if (entry[0] == 0x00) break;
+                if (entry[0] == 0xE5) continue;
+                if (entry[11] == 0x0F) continue;
+
+                char entryName[13] = {0};
+                memcpy(entryName, entry, 11);
+                for (int k = 10; k >= 0; k--) {
+                    if (entryName[k] == ' ')
+                        entryName[k] = '\0';
+                    else
+                        break;
+                }
+
+                if (strcmp(entryName, dirName) == 0) {
+                    entry[0] = 0xE5;
+                    if (!diskWrite(sector + i, sectorData, m_bpb.m_bytesPerSector)) return false;
+                    break;
+                }
+            }
         }
+
+        uint32_t nextCluster = readFatEntry(currentCluster);
+        if (nextCluster >= 0x0FFFFFF8) break;
+        if (nextCluster == 0x0FFFFFF7) return false;
+        currentCluster = nextCluster;
     }
 
     while (cluster < 0x0FFFFFF8) {
@@ -851,40 +950,154 @@ bool CFat32FileSystem::deleteDirectory(const char* name) {
 bool CFat32FileSystem::renameFile(const char* oldName, const char* newName) {
     if (!validateFileName(newName)) return false;
 
-    uint32_t cluster, size;
-    uint8_t attributes;
-    if (!findFile(oldName, cluster, size, attributes)) return false;
+    uint32_t sourceCluster, sourceSize;
+    uint8_t sourceAttributes;
+    if (!findFile(oldName, sourceCluster, sourceSize, sourceAttributes)) return false;
 
-    uint32_t dstCluster, dstSize;
-    uint8_t dstAttributes;
-    if (findFile(newName, dstCluster, dstSize, dstAttributes)) return false;
+    uint32_t sourceDirectoryCluster = m_currentDirectoryCluster;
+    const char* sourceFileName = oldName;
 
-    uint8_t sectorData[m_bpb.m_bytesPerSector];
-    uint32_t sector =
-        (m_currentDirectoryCluster - 2) * m_bpb.m_sectorsPerCluster + m_firstDataSector;
+    if (oldName[0] == '/') {
+        sourceDirectoryCluster = ROOT_CLUSTER;
+        sourceFileName++;
+    }
 
-    if (!readSector(sector, sectorData)) return false;
+    const char* sourceLastSlash = strrchr(sourceFileName, '/');
+    if (sourceLastSlash) {
+        char sourcePath[MAX_PATH] = {0};
+        strncpy(sourcePath, sourceFileName, sourceLastSlash - sourceFileName);
 
-    for (size_t i = 0; i < m_bpb.m_bytesPerSector; i += 32) {
-        uint8_t* entry = &sectorData[i];
-        if (entry[0] == 0x00) break;
-        if (entry[0] == 0xE5) continue;
+        uint32_t tempCluster, tempSize;
+        uint8_t tempAttributes;
+        if (!findFile(sourcePath, tempCluster, tempSize, tempAttributes) ||
+            !(tempAttributes & 0x10))
+            return false;
 
-        char entryName[13] = {0};
-        memcpy(entryName, entry, 11);
-        for (int j = 10; j >= 0; j--) {
-            if (entryName[j] == ' ')
-                entryName[j] = '\0';
-            else
-                break;
+        sourceDirectoryCluster = tempCluster;
+        sourceFileName = sourceLastSlash + 1;
+    }
+
+    uint32_t destDirectoryCluster = m_currentDirectoryCluster;
+    const char* destFileName = newName;
+    bool destIsDirectory = false;
+
+    if (newName[0] == '/') {
+        destDirectoryCluster = ROOT_CLUSTER;
+        destFileName++;
+    }
+
+    uint32_t destCluster, destSize;
+    uint8_t destAttributes;
+    if (findFile(newName, destCluster, destSize, destAttributes)) {
+        if (destAttributes & 0x10) {
+            destIsDirectory = true;
+            destDirectoryCluster = destCluster;
+            destFileName = sourceFileName;
+        } else
+            return false;
+    } else {
+        const char* destLastSlash = strrchr(destFileName, '/');
+        if (destLastSlash) {
+            char destPath[MAX_PATH] = {0};
+            strncpy(destPath, destFileName, destLastSlash - destFileName);
+
+            uint32_t tempCluster, tempSize;
+            uint8_t tempAttributes;
+            if (!findFile(destPath, tempCluster, tempSize, tempAttributes) ||
+                !(tempAttributes & 0x10))
+                return false;
+
+            destDirectoryCluster = tempCluster;
+            destFileName = destLastSlash + 1;
         }
+    }
 
-        if (strcmp(entryName, oldName) == 0) {
-            memset(entry, ' ', 11);
-            strncpy(reinterpret_cast<char*>(entry), newName, strlen(newName));
+    if (sourceDirectoryCluster == destDirectoryCluster && strcmp(sourceFileName, destFileName) == 0)
+        return true;
 
-            if (!diskWrite(sector, sectorData, m_bpb.m_bytesPerSector)) return false;
-            return true;
+    if (sourceDirectoryCluster == destDirectoryCluster) {
+        uint8_t sectorData[m_bpb.m_bytesPerSector];
+        uint32_t currentCluster = sourceDirectoryCluster;
+
+        while (true) {
+            uint32_t sector = (currentCluster - 2) * m_bpb.m_sectorsPerCluster + m_firstDataSector;
+
+            for (uint32_t i = 0; i < m_bpb.m_sectorsPerCluster; i++) {
+                if (!readSector(sector + i, sectorData)) return false;
+
+                for (size_t j = 0; j < m_bpb.m_bytesPerSector; j += 32) {
+                    uint8_t* entry = &sectorData[j];
+                    if (entry[0] == 0x00) break;
+                    if (entry[0] == 0xE5) continue;
+                    if (entry[11] == 0x0F) continue;
+
+                    char entryName[13] = {0};
+                    memcpy(entryName, entry, 11);
+                    for (int k = 10; k >= 0; k--) {
+                        if (entryName[k] == ' ')
+                            entryName[k] = '\0';
+                        else
+                            break;
+                    }
+
+                    if (strcmp(entryName, sourceFileName) == 0) {
+                        memset(entry, ' ', 11);
+                        strncpy(reinterpret_cast<char*>(entry), destFileName, strlen(destFileName));
+
+                        if (!diskWrite(sector + i, sectorData, m_bpb.m_bytesPerSector))
+                            return false;
+                        return true;
+                    }
+                }
+            }
+
+            uint32_t nextCluster = readFatEntry(currentCluster);
+            if (nextCluster >= 0x0FFFFFF8) break;
+            if (nextCluster == 0x0FFFFFF7) return false;
+            currentCluster = nextCluster;
+        }
+    } else {
+        if (!writeDirectoryEntry(destDirectoryCluster, destFileName, sourceAttributes,
+                                 sourceCluster, sourceSize))
+            return false;
+
+        uint8_t sectorData[m_bpb.m_bytesPerSector];
+        uint32_t currentCluster = sourceDirectoryCluster;
+
+        while (true) {
+            uint32_t sector = (currentCluster - 2) * m_bpb.m_sectorsPerCluster + m_firstDataSector;
+
+            for (uint32_t i = 0; i < m_bpb.m_sectorsPerCluster; i++) {
+                if (!readSector(sector + i, sectorData)) return false;
+
+                for (size_t j = 0; j < m_bpb.m_bytesPerSector; j += 32) {
+                    uint8_t* entry = &sectorData[j];
+                    if (entry[0] == 0x00) break;
+                    if (entry[0] == 0xE5) continue;
+                    if (entry[11] == 0x0F) continue;
+
+                    char entryName[13] = {0};
+                    memcpy(entryName, entry, 11);
+                    for (int k = 10; k >= 0; k--) {
+                        if (entryName[k] == ' ')
+                            entryName[k] = '\0';
+                        else
+                            break;
+                    }
+
+                    if (strcmp(entryName, sourceFileName) == 0) {
+                        entry[0] = 0xE5;
+                        if (!diskWrite(sector + i, sectorData, m_bpb.m_bytesPerSector))
+                            return false;
+                        return true;
+                    }
+                }
+            }
+
+            uint32_t nextCluster = readFatEntry(currentCluster);
+            if (nextCluster >= 0x0FFFFFF8) break;
+            if (nextCluster == 0x0FFFFFF7) return false;
+            currentCluster = nextCluster;
         }
     }
 
@@ -976,45 +1189,203 @@ bool CFat32FileSystem::findFileInDirectory(uint32_t dirCluster, const char* name
 }
 
 bool CFat32FileSystem::updateFileSize(const char* filename, uint32_t newSize) {
-    uint32_t parentCluster = m_currentDirectoryCluster;
+    uint32_t directoryCluster = m_currentDirectoryCluster;
+    const char* fileName = filename;
 
     if (filename[0] == '/') {
-        parentCluster = ROOT_CLUSTER;
-        filename++;
+        directoryCluster = ROOT_CLUSTER;
+        fileName++;
+    }
+
+    const char* lastSlash = strrchr(fileName, '/');
+    if (lastSlash) {
+        char dirPath[MAX_PATH] = {0};
+        strncpy(dirPath, fileName, lastSlash - fileName);
+
+        uint32_t tempCluster, tempSize;
+        uint8_t tempAttributes;
+        if (!findFile(dirPath, tempCluster, tempSize, tempAttributes) || !(tempAttributes & 0x10))
+            return false;
+
+        directoryCluster = tempCluster;
+        fileName = lastSlash + 1;
     }
 
     uint8_t sectorData[m_bpb.m_bytesPerSector];
-    uint32_t sector = (parentCluster - 2) * m_bpb.m_sectorsPerCluster + m_firstDataSector;
+    uint32_t currentCluster = directoryCluster;
 
-    if (!readSector(sector, sectorData)) return false;
+    while (true) {
+        uint32_t sector = (currentCluster - 2) * m_bpb.m_sectorsPerCluster + m_firstDataSector;
 
-    for (size_t i = 0; i < m_bpb.m_bytesPerSector; i += 32) {
-        uint8_t* entry = &sectorData[i];
-        if (entry[0] == 0x00) break;
-        if (entry[0] == 0xE5) continue;
+        for (uint32_t i = 0; i < m_bpb.m_sectorsPerCluster; i++) {
+            if (!readSector(sector + i, sectorData)) return false;
 
-        if (entry[11] == 0x0F) continue;
+            for (size_t j = 0; j < m_bpb.m_bytesPerSector; j += 32) {
+                uint8_t* entry = &sectorData[j];
+                if (entry[0] == 0x00) break;
+                if (entry[0] == 0xE5) continue;
+                if (entry[11] == 0x0F) continue;
 
-        char entryName[13] = {0};
-        memcpy(entryName, entry, 11);
+                char entryName[13] = {0};
+                memcpy(entryName, entry, 11);
 
-        for (int j = 10; j >= 0; j--) {
-            if (entryName[j] == ' ')
-                entryName[j] = 0;
-            else if (entryName[j] != 0)
-                break;
+                for (int k = 10; k >= 0; k--) {
+                    if (entryName[k] == ' ')
+                        entryName[k] = '\0';
+                    else
+                        break;
+                }
+
+                if (strcmp(entryName, fileName) == 0) {
+                    entry[28] = newSize & 0xFF;
+                    entry[29] = (newSize >> 8) & 0xFF;
+                    entry[30] = (newSize >> 16) & 0xFF;
+                    entry[31] = (newSize >> 24) & 0xFF;
+
+                    if (!diskWrite(sector + i, sectorData, m_bpb.m_bytesPerSector)) return false;
+                    return true;
+                }
+            }
         }
 
-        if (strcmp(entryName, filename) == 0) {
-            entry[28] = newSize & 0xFF;
-            entry[29] = (newSize >> 8) & 0xFF;
-            entry[30] = (newSize >> 16) & 0xFF;
-            entry[31] = (newSize >> 24) & 0xFF;
+        uint32_t nextCluster = readFatEntry(currentCluster);
+        if (nextCluster >= 0x0FFFFFF8) break;
+        if (nextCluster == 0x0FFFFFF7) return false;
+        currentCluster = nextCluster;
+    }
 
-            if (!diskWrite(sector, sectorData, m_bpb.m_bytesPerSector)) return false;
+    return false;
+}
 
-            return true;
+bool CFat32FileSystem::deleteDirectoryRecursive(const char* name) {
+    uint32_t dirCluster, dirSize;
+    uint8_t dirAttributes;
+    if (!findFile(name, dirCluster, dirSize, dirAttributes)) return false;
+
+    if (!(dirAttributes & 0x10)) return false;
+
+    char fullPath[MAX_PATH] = {0};
+    if (name[0] == '/')
+        strncpy(fullPath, name, MAX_PATH - 1);
+    else {
+        if (m_currentPath[strlen(m_currentPath) - 1] == '/')
+            snprintf(fullPath, MAX_PATH - 1, "%s%s", m_currentPath, name);
+        else
+            snprintf(fullPath, MAX_PATH - 1, "%s/%s", m_currentPath, name);
+    }
+
+    uint8_t sectorData[m_bpb.m_bytesPerSector];
+    uint32_t currentCluster = dirCluster;
+
+    while (true) {
+        uint32_t sector = (currentCluster - 2) * m_bpb.m_sectorsPerCluster + m_firstDataSector;
+
+        for (uint32_t i = 0; i < m_bpb.m_sectorsPerCluster; i++) {
+            if (!readSector(sector + i, sectorData)) return false;
+
+            for (size_t j = 0; j < m_bpb.m_bytesPerSector; j += 32) {
+                uint8_t* entry = &sectorData[j];
+                if (entry[0] == 0x00) break;
+                if (entry[0] == 0xE5) continue;
+                if (entry[11] == 0x0F) continue;
+
+                char entryName[13] = {0};
+                memcpy(entryName, entry, 11);
+
+                for (int k = 10; k >= 0; k--) {
+                    if (entryName[k] == ' ')
+                        entryName[k] = '\0';
+                    else
+                        break;
+                }
+
+                if (strcmp(entryName, ".") == 0 || strcmp(entryName, "..") == 0) continue;
+
+                char entryPath[MAX_PATH] = {0};
+                snprintf(entryPath, MAX_PATH - 1, "%s/%s", fullPath, entryName);
+
+                uint8_t attributes = entry[11];
+                if (attributes & 0x10)
+                    deleteDirectoryRecursive(entryPath);
+                else
+                    deleteFile(entryPath);
+            }
         }
+
+        uint32_t nextCluster = readFatEntry(currentCluster);
+        if (nextCluster >= 0x0FFFFFF8) break;
+        if (nextCluster == 0x0FFFFFF7) return false;
+        currentCluster = nextCluster;
+    }
+
+    uint32_t directoryCluster = m_currentDirectoryCluster;
+    const char* dirName = name;
+
+    if (name[0] == '/') {
+        directoryCluster = ROOT_CLUSTER;
+        dirName++;
+    }
+
+    const char* lastSlash = strrchr(dirName, '/');
+    if (lastSlash) {
+        char parentPath[MAX_PATH] = {0};
+        strncpy(parentPath, dirName, lastSlash - dirName);
+
+        uint32_t tempCluster, tempSize;
+        uint8_t tempAttributes;
+        if (!findFile(parentPath, tempCluster, tempSize, tempAttributes) ||
+            !(tempAttributes & 0x10))
+            return false;
+
+        directoryCluster = tempCluster;
+        dirName = lastSlash + 1;
+    }
+
+    uint8_t entryData[m_bpb.m_bytesPerSector];
+    currentCluster = directoryCluster;
+
+    while (true) {
+        uint32_t sector = (currentCluster - 2) * m_bpb.m_sectorsPerCluster + m_firstDataSector;
+
+        for (uint32_t i = 0; i < m_bpb.m_sectorsPerCluster; i++) {
+            if (!readSector(sector + i, entryData)) return false;
+
+            for (size_t j = 0; j < m_bpb.m_bytesPerSector; j += 32) {
+                uint8_t* entry = &entryData[j];
+                if (entry[0] == 0x00) break;
+                if (entry[0] == 0xE5) continue;
+                if (entry[11] == 0x0F) continue;
+
+                char entryName[13] = {0};
+                memcpy(entryName, entry, 11);
+                for (int k = 10; k >= 0; k--) {
+                    if (entryName[k] == ' ')
+                        entryName[k] = '\0';
+                    else
+                        break;
+                }
+
+                if (strcmp(entryName, dirName) == 0) {
+                    entry[0] = 0xE5;
+                    if (!diskWrite(sector + i, entryData, m_bpb.m_bytesPerSector)) return false;
+
+                    while (dirCluster < 0x0FFFFFF8) {
+                        uint32_t nextCluster = readFatEntry(dirCluster);
+                        freeCluster(dirCluster);
+                        if (nextCluster >= 0x0FFFFFF8) break;
+                        if (nextCluster == 0x0FFFFFF7) break;
+                        dirCluster = nextCluster;
+                    }
+
+                    return true;
+                }
+            }
+        }
+
+        uint32_t nextCluster = readFatEntry(currentCluster);
+        if (nextCluster >= 0x0FFFFFF8) break;
+        if (nextCluster == 0x0FFFFFF7) return false;
+        currentCluster = nextCluster;
     }
 
     return false;

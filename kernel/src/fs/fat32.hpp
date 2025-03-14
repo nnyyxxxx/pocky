@@ -97,6 +97,7 @@ public:
     bool createDirectory(const char* name);
     bool deleteFile(const char* name);
     bool deleteDirectory(const char* name);
+    bool deleteDirectoryRecursive(const char* name);
     bool renameFile(const char* oldName, const char* newName);
     bool findFile(const char* name, uint32_t& cluster, uint32_t& size, uint8_t& attributes);
     bool findFileInDirectory(uint32_t dirCluster, const char* name, uint32_t& cluster,
