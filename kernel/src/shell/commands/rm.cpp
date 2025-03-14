@@ -4,6 +4,7 @@
 #include "fs/fat32.hpp"
 #include "lib/lib.hpp"
 #include "lib/string.hpp"
+#include "printf.hpp"
 
 namespace commands {
 
@@ -33,6 +34,7 @@ void cmd_rm(const char* path) {
     pid_t pid = pm.create_process("rm", shell_pid);
 
     if (!path || !*path) {
+        printf("rm: missing operand\n");
         pm.terminate_process(pid);
         return;
     }
@@ -57,6 +59,7 @@ void cmd_rm(const char* path) {
     uint32_t cluster, size;
     uint8_t attributes;
     if (!fs.findFile(path, cluster, size, attributes)) {
+        printf("%s: no such file or directory\n", path);
         pm.terminate_process(pid);
         return;
     }
