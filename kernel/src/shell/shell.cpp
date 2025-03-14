@@ -63,6 +63,11 @@ pid_t shell_pid = 0;
 char command_history[MAX_HISTORY_SIZE][256] = {0};
 size_t history_count = 0;
 
+size_t current_tab_match = 0;
+char current_tab_prefix[256] = {0};
+char tab_matches[16][256] = {0};
+size_t tab_match_count = 0;
+
 namespace {
 
 template <typename F>
@@ -192,48 +197,71 @@ void handle_tab_completion() {
     size_t word_len = strlen(last_word);
     if (word_len == 0) return;
 
-    char command[256] = {0};
-    if (space) {
-        size_t cmd_len = space - input_buffer;
-        strncpy(command, input_buffer, cmd_len);
-    } else
-        strcpy(command, input_buffer);
+    bool continuing = (tab_match_count > 0);
 
-    auto& fs = fs::CFat32FileSystem::instance();
-    uint32_t current_cluster;
-    uint32_t size;
-    uint8_t attributes;
-    if (!fs.findFile(".", current_cluster, size, attributes)) current_cluster = ROOT_CLUSTER;
+    if (!continuing) {
+        current_tab_match = 0;
+        tab_match_count = 0;
+        strcpy(current_tab_prefix, last_word);
 
-    uint8_t buffer[1024];
-    fs.readFile(current_cluster, buffer, sizeof(buffer));
+        char command[256] = {0};
+        if (space) {
+            size_t cmd_len = space - input_buffer;
+            strncpy(command, input_buffer, cmd_len);
+        } else
+            strcpy(command, input_buffer);
 
-    const char* match = nullptr;
-    size_t matches = 0;
+        auto& fs = fs::CFat32FileSystem::instance();
+        uint32_t current_cluster;
+        uint32_t size;
+        uint8_t attributes;
+        if (!fs.findFile(".", current_cluster, size, attributes)) current_cluster = ROOT_CLUSTER;
 
-    for (size_t i = 0; i < sizeof(buffer); i += 32) {
-        uint8_t* entry = &buffer[i];
-        if (entry[0] == 0x00) break;
-        if (entry[0] == 0xE5) continue;
+        uint8_t buffer[1024];
+        fs.readFile(current_cluster, buffer, sizeof(buffer));
 
-        char name[13] = {0};
-        memcpy(name, entry, 11);
-        name[11] = '\0';
+        for (size_t i = 0; i < sizeof(buffer); i += 32) {
+            uint8_t* entry = &buffer[i];
+            if (entry[0] == 0x00) break;
+            if (entry[0] == 0xE5) continue;
 
-        if (strncmp(name, last_word, word_len) == 0) {
-            bool isDirectory = (entry[11] & 0x10) != 0;
-            if (strcmp(command, "cd") == 0 && !isDirectory) continue;
-            match = name;
-            matches++;
+            char name[13] = {0};
+            memcpy(name, entry, 11);
+            name[11] = '\0';
+
+            if (strncmp(name, current_tab_prefix, strlen(current_tab_prefix)) == 0) {
+                bool isDirectory = (entry[11] & 0x10) != 0;
+                if (strcmp(command, "cd") == 0 && !isDirectory) continue;
+
+                if (tab_match_count < 16) {
+                    strcpy(tab_matches[tab_match_count], name);
+                    tab_match_count++;
+                }
+            }
         }
     }
 
-    if (matches == 1) {
-        size_t pos = last_word - input_buffer;
-        const char* completion = match + word_len;
-        strcpy(input_buffer + pos + word_len, completion);
+    if (tab_match_count > 0) {
+        const char* match = tab_matches[current_tab_match];
+
+        printf("\r");
+        for (size_t i = 0; i < terminal_column; i++) {
+            terminal_putchar_at(' ', terminal_color, i, terminal_row);
+        }
+        terminal_column = 0;
+
+        if (space) {
+            size_t pos = space - input_buffer + 1;
+            input_buffer[pos] = '\0';
+            strcpy(input_buffer + pos, match);
+        } else
+            strcpy(input_buffer, match);
         input_pos = strlen(input_buffer);
-        printf(completion);
+
+        print_prompt();
+        printf("%s", input_buffer);
+
+        current_tab_match = (current_tab_match + 1) % tab_match_count;
     }
 }
 
@@ -254,6 +282,8 @@ void process_keypress(char c) {
         handle_tab_completion();
         return;
     }
+
+    tab_match_count = 0;
 
     if (c == '\n') {
         terminal_putchar('\n');
