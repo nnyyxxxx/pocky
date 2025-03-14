@@ -335,9 +335,8 @@ void process_keypress(char c) {
 
 void process_command() {
     while (input_pos > 0 &&
-           (input_buffer[input_pos - 1] == ' ' || input_buffer[input_pos - 1] == '\t')) {
+           (input_buffer[input_pos - 1] == ' ' || input_buffer[input_pos - 1] == '\t'))
         input_buffer[--input_pos] = '\0';
-    }
 
     if (input_pos == 0) {
         print_prompt();
@@ -352,74 +351,92 @@ void process_command() {
         memcpy(command_history[MAX_HISTORY_SIZE - 1], input_buffer, input_pos + 1);
     }
 
-    char* cmd = input_buffer;
-    char* args = nullptr;
-    for (size_t i = 0; i < input_pos; ++i) {
-        if (input_buffer[i] == ' ') {
-            input_buffer[i] = '\0';
-            args = &input_buffer[i + 1];
-            break;
+    char* current_cmd = input_buffer;
+    while (current_cmd && *current_cmd) {
+        char* next_cmd = strchr(current_cmd, ';');
+        if (next_cmd) *next_cmd++ = '\0';
+
+        while (*current_cmd == ' ' || *current_cmd == '\t')
+            current_cmd++;
+
+        if (!*current_cmd) {
+            if (!next_cmd) break;
+            current_cmd = next_cmd;
+            continue;
         }
-    }
 
-    if (strcmp(cmd, "help") == 0)
-        commands::cmd_help();
-    else if (strcmp(cmd, "echo") == 0)
-        commands::cmd_echo(args);
-    else if (strcmp(cmd, "clear") == 0)
-        terminal_clear();
-    else if (strcmp(cmd, "crash") == 0)
-        commands::cmd_crash();
-    else if (strcmp(cmd, "shutdown") == 0 || strcmp(cmd, "poweroff") == 0)
-        commands::cmd_shutdown();
-    else if (strcmp(cmd, "memory") == 0)
-        commands::cmd_memory();
-    else if (strcmp(cmd, "ls") == 0)
-        commands::cmd_ls(args);
-    else if (strcmp(cmd, "mkdir") == 0)
-        commands::cmd_mkdir(args);
-    else if (strcmp(cmd, "cd") == 0)
-        commands::cmd_cd(args);
-    else if (strcmp(cmd, "cat") == 0)
-        commands::cmd_cat(args);
-    else if (strcmp(cmd, "mv") == 0)
-        commands::cmd_mv(args);
-    else if (strcmp(cmd, "rm") == 0)
-        commands::cmd_rm(args);
-    else if (strcmp(cmd, "touch") == 0)
-        commands::cmd_touch(args);
-    else if (strcmp(cmd, "edit") == 0) {
-        char filename[256];
-        if (args)
-            strcpy(filename, args);
-        else
-            filename[0] = '\0';
+        char* cmd = current_cmd;
+        char* args = nullptr;
+        for (size_t i = 0; cmd[i]; ++i) {
+            if (cmd[i] == ' ') {
+                cmd[i] = '\0';
+                args = &cmd[i + 1];
+                break;
+            }
+        }
 
-        memset(input_buffer, 0, sizeof(input_buffer));
-        input_pos = 0;
+        if (strcmp(cmd, "help") == 0)
+            commands::cmd_help();
+        else if (strcmp(cmd, "echo") == 0)
+            commands::cmd_echo(args);
+        else if (strcmp(cmd, "clear") == 0)
+            terminal_clear();
+        else if (strcmp(cmd, "crash") == 0)
+            commands::cmd_crash();
+        else if (strcmp(cmd, "shutdown") == 0 || strcmp(cmd, "poweroff") == 0)
+            commands::cmd_shutdown();
+        else if (strcmp(cmd, "memory") == 0)
+            commands::cmd_memory();
+        else if (strcmp(cmd, "ls") == 0)
+            commands::cmd_ls(args);
+        else if (strcmp(cmd, "mkdir") == 0)
+            commands::cmd_mkdir(args);
+        else if (strcmp(cmd, "cd") == 0)
+            commands::cmd_cd(args);
+        else if (strcmp(cmd, "cat") == 0)
+            commands::cmd_cat(args);
+        else if (strcmp(cmd, "mv") == 0)
+            commands::cmd_mv(args);
+        else if (strcmp(cmd, "rm") == 0)
+            commands::cmd_rm(args);
+        else if (strcmp(cmd, "touch") == 0)
+            commands::cmd_touch(args);
+        else if (strcmp(cmd, "edit") == 0) {
+            char filename[256];
+            if (args)
+                strcpy(filename, args);
+            else
+                filename[0] = '\0';
 
-        commands::cmd_edit(filename);
-        return;
-    } else if (strcmp(cmd, "history") == 0)
-        commands::cmd_history();
-    else if (strcmp(cmd, "uptime") == 0)
-        commands::cmd_uptime();
-    else if (strcmp(cmd, "ps") == 0)
-        commands::cmd_ps();
-    else if (strcmp(cmd, "pkill") == 0)
-        commands::cmd_pkill(args);
-    else if (strcmp(cmd, "time") == 0)
-        commands::cmd_time();
-    else if (strcmp(cmd, "less") == 0)
-        commands::cmd_less(args);
-    else if (strcmp(cmd, "ipctest") == 0)
-        commands::cmd_ipc_test();
-    else if (strcmp(cmd, "cores") == 0)
-        commands::cmd_cores();
-    else {
-        set_red();
-        printf("Unknown command: %s\n", cmd);
-        reset_color();
+            memset(input_buffer, 0, sizeof(input_buffer));
+            input_pos = 0;
+
+            commands::cmd_edit(filename);
+            return;
+        } else if (strcmp(cmd, "history") == 0)
+            commands::cmd_history();
+        else if (strcmp(cmd, "uptime") == 0)
+            commands::cmd_uptime();
+        else if (strcmp(cmd, "ps") == 0)
+            commands::cmd_ps();
+        else if (strcmp(cmd, "pkill") == 0)
+            commands::cmd_pkill(args);
+        else if (strcmp(cmd, "time") == 0)
+            commands::cmd_time();
+        else if (strcmp(cmd, "less") == 0)
+            commands::cmd_less(args);
+        else if (strcmp(cmd, "ipctest") == 0)
+            commands::cmd_ipc_test();
+        else if (strcmp(cmd, "cores") == 0)
+            commands::cmd_cores();
+        else {
+            set_red();
+            printf("Unknown command: %s\n", cmd);
+            reset_color();
+        }
+
+        if (!next_cmd) break;
+        current_cmd = next_cmd;
     }
 
     memset(input_buffer, 0, sizeof(input_buffer));

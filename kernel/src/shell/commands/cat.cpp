@@ -13,6 +13,7 @@ void cmd_cat(const char* path) {
     pid_t pid = pm.create_process("cat", shell_pid);
 
     if (!path || !*path) {
+        printf("cat: missing operand\n");
         pm.terminate_process(pid);
         return;
     }
