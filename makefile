@@ -2,13 +2,13 @@ KERNEL_SRC = kernel/src
 BUILD_DIR = build
 IMAGE_DIR = image
 
-default: build
+default: image build
 
 build: format
 	@mkdir -p $(BUILD_DIR)
 	@cd $(BUILD_DIR) && cmake .. && make
 
-all: clean build
+all: clean default
 
 format:
 	@clang-format -i $(shell find $(KERNEL_SRC) -name "*.cpp" -o -name "*.hpp") > /dev/null 2>&1
@@ -21,12 +21,6 @@ image:
 	fi
 
 run:
-	@if [ ! -f $(IMAGE_DIR)/fat32.img ]; then \
-		echo "No file system image found, aborting..."; \
-		echo "Please run 'make image' to create an image.\n"; \
-		exit 1; \
-	fi
-
 	@mkdir -p $(BUILD_DIR)/iso/boot/grub
 	@echo "set timeout=10" > $(BUILD_DIR)/iso/boot/grub/grub.cfg
 	@echo "set default=0" >> $(BUILD_DIR)/iso/boot/grub/grub.cfg
