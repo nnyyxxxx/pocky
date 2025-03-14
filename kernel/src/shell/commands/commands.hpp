@@ -23,7 +23,10 @@ void cmd_time();
 void cmd_ps();
 void cmd_ipc_test();
 void cmd_cores();
+void cmd_alias();
 
 void append_to_history_file(const char* command);
+void load_aliases();
+const char* get_alias(const char* name);
 
 }  // namespace commands

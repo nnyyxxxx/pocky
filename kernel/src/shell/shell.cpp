@@ -350,6 +350,25 @@ void process_command() {
             }
         }
 
+        const char* alias_value = commands::get_alias(cmd);
+        if (alias_value) {
+            char expanded_cmd[512] = {0};
+            if (args)
+                snprintf(expanded_cmd, sizeof(expanded_cmd), "%s %s", alias_value, args);
+            else
+                strncpy(expanded_cmd, alias_value, sizeof(expanded_cmd) - 1);
+            strncpy(current_cmd, expanded_cmd, strlen(expanded_cmd));
+            cmd = current_cmd;
+            args = nullptr;
+            for (size_t i = 0; cmd[i]; ++i) {
+                if (cmd[i] == ' ') {
+                    cmd[i] = '\0';
+                    args = &cmd[i + 1];
+                    break;
+                }
+            }
+        }
+
         if (strcmp(cmd, "help") == 0)
             commands::cmd_help();
         else if (strcmp(cmd, "echo") == 0)
@@ -404,6 +423,8 @@ void process_command() {
             commands::cmd_ipc_test();
         else if (strcmp(cmd, "cores") == 0)
             commands::cmd_cores();
+        else if (strcmp(cmd, "alias") == 0)
+            commands::cmd_alias();
         else {
             set_red();
             printf("Unknown command: %s\n", cmd);
@@ -443,6 +464,8 @@ void init_shell() {
     const char* welcome_msg = "Welcome to the kernel!\n";
     fs.createFileWithContent("tmp/welcome", reinterpret_cast<const uint8_t*>(welcome_msg),
                              strlen(welcome_msg), 0);
+
+    commands::load_aliases();
 
     printf("\n");
     print_prompt();

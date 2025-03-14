@@ -75,6 +75,7 @@ set(KERNEL_CPP_SRCS
     ${KERNEL_SRC}/shell/commands/less.cpp
     ${KERNEL_SRC}/shell/commands/ipc_test.cpp
     ${KERNEL_SRC}/shell/commands/cores.cpp
+    ${KERNEL_SRC}/shell/commands/alias.cpp
 )
 
 set(KERNEL_ASM_SRCS
